@@ -122,7 +122,8 @@
       "Bash(git push *)",
       "Bash(CLOUDFLARE_API_TOKEN=$\\(cat ~/.secrets/sarab-cf-token\\) CLOUDFLARE_ACCOUNT_ID=10fc6779cfbb420f1befa2f3d56443b9 npx wrangler pages deploy dist --project-name=sarab-website --branch=main --commit-dirty=true)",
       "Bash(node _pshot2.mjs)",
-      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Post-launch: AR letter-spacing fix, analytics windows + returning visitors, a11y button *)"
+      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Post-launch: AR letter-spacing fix, analytics windows + returning visitors, a11y button *)",
+      "Bash(node --check /tmp/claude-1000/-home-admin9-HADDAD-TECH-PROJECTS-sarab-website/646f618b-3f0a-44ba-9b97-e6b5c88e7eab/scratchpad/office.js)"
     ]
   }
 }

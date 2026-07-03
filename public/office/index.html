@@ -631,7 +631,7 @@ function renderVisitors() {
     ${bars('مصادر الزيارات', s.sources)}
     ${bars('الدول', s.countries)}
     ${bars('عمق التمرير — وصلوا حتى', s.funnel.map((r) => ({ k: r.k + '%', n: r.n })))}
-    ${bars('الأقسام التي وصلوها (زوار)', s.sections.map((r) => ({ k: (${secname})[r.k] || r.k, n: r.n })))}
+    ${bars('الأقسام التي وصلوها (زوار)', s.sections.map((r) => ({ k: ({ proof: 'قسم قبل/بعد', reels: 'قسم الريلز', book: 'قسم الحجز' })[r.k] || r.k, n: r.n })))}
     ${s.campaigns.length ? `<div class="tablebox"><table style="min-width:0">
       <thead><tr><th>الحملة (utm_campaign)</th><th>زيارات</th><th>واتساب</th><th>طلبات</th></tr></thead>
       <tbody>${s.campaigns.map((c) => `<tr><td>${esc(c.k)}</td><td class="num">${c.visits}</td><td class="num">${c.wa}</td><td class="num">${c.submits}</td></tr>`).join('')}</tbody>
