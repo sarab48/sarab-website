@@ -154,21 +154,24 @@
   .statbox{padding:.8rem 1rem}
   .statbox>b{display:block; color:var(--muted); font-size:.8rem; margin-bottom:.4rem}
 
-  /* smartphone: bookings become cards */
+  /* smartphone: bookings as compact 2-line rows — name+date / city+status.
+     Tap opens the drawer with everything else. ~9 clients per screen. */
   @media (max-width:720px){
     #grid{min-width:0}
-    #gridbox{border:none; background:transparent; overflow:visible}
+    #gridbox{border:1px solid var(--line); border-radius:12px; background:var(--panel)}
     #grid thead{display:none}
     #grid, #grid tbody{display:block}
     #grid tbody tr{
-      display:block; border:1px solid var(--line); border-radius:12px;
-      margin-block-end:.6rem; padding:.4rem .7rem; background:var(--panel);
+      display:grid; grid-template-columns:1fr auto; column-gap:.9rem; row-gap:.1rem;
+      align-items:baseline; padding:.55rem .8rem; border-bottom:1px solid var(--line);
     }
-    #grid tbody td{
-      display:flex; justify-content:space-between; align-items:baseline; gap:1rem;
-      border:none; padding:.26rem 0; white-space:normal; text-align:end;
-    }
-    #grid tbody td::before{content:attr(data-l); color:var(--muted); font-size:.74rem; white-space:nowrap}
+    #grid tbody td{display:none; border:none; padding:0; white-space:normal; text-align:start}
+    #grid tbody td:nth-child(2){display:block; grid-column:1; grid-row:1; font-size:.95rem}
+    #grid tbody td:nth-child(4){display:block; grid-column:2; grid-row:1; text-align:end; font-size:.88rem}
+    #grid tbody td:nth-child(6){display:block; grid-column:1; grid-row:2; color:var(--muted); font-size:.8rem}
+    #grid tbody td:nth-child(8){display:block; grid-column:2; grid-row:2; justify-self:end}
+    #grid tbody td:nth-child(8) .badge{font-size:.68rem; padding:.08rem .5rem}
+    #grid tbody td .wa{display:none}
   }
 
   #toast{

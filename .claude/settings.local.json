@@ -129,7 +129,8 @@
       "Bash(convert public/assets/brand/brand-name-logo.jpg -resize 580x580 -gravity center -background \"srgb\\(247,243,234\\)\" -extent 1200x630 -quality 88 -strip public/og-brand.jpg)",
       "Bash(identify public/og-brand.jpg)",
       "Bash(awk '{print $3, $7}')",
-      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'OG share image: new brand-name logo \\(og-brand.jpg\\) *)"
+      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'OG share image: new brand-name logo \\(og-brand.jpg\\) *)",
+      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Mobile bookings: compact 2-line rows \\(name+date / city+status\\), ~10 per screen *)"
     ]
   }
 }
