@@ -4,6 +4,7 @@ import { REELS } from '../data/reels.js'
 import SplitText from '../components/SplitText.jsx'
 import AmbientDust from '../components/AmbientDust.jsx'
 import { prefersReducedMotion } from '../lib/capability.js'
+import { hit } from '../lib/analytics.js'
 
 /*
   Energy — the reels as floating "kiosk screens" in a coverflow: each tilts toward the
@@ -21,7 +22,7 @@ function Reel({ reel, label, imageAlt }) {
     if (!el) return
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) el.play?.().catch(() => {})
+        if (entry.isIntersecting) { el.play?.().catch(() => {}); if (!el.dataset.counted) { el.dataset.counted = '1'; hit('reel') } }
         else el.pause?.()
       },
       { threshold: 0.5 },

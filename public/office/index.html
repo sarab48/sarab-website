@@ -622,12 +622,20 @@ function renderVisitors() {
       <div class="kpi"><b>${k.submits}</b><span>طلبات من النموذج</span></div>
       <div class="kpi"><b>${k.avg_time || 0} ث</b><span>متوسط مدة الزيارة</span></div>
       <div class="kpi"><b>${k.came_back || 0}</b><span>زوار عائدون (زاروا أكثر من مرة)</span></div>
-      <div class="kpi gold"><b>${s.meta_leads}</b><span>زيارات من إعلانات ميتا</span></div>
+      <div class="kpi gold"><b>${s.meta_visits}</b><span>زيارات من إعلانات ميتا</span></div>
+      <div class="kpi"><b>${k.visits ? (k.wa / k.visits * 100).toFixed(1) : 0}%</b><span>زيارة → واتساب</span></div>
+      <div class="kpi"><b>${k.visits ? (k.submits / k.visits * 100).toFixed(1) : 0}%</b><span>زيارة → طلب حجز</span></div>
+      <div class="kpi"><b>${Math.max(0, (k.form_start || 0) - (k.submits || 0))}</b><span>بدأوا النموذج ولم يرسلوا</span></div>
     </section>
     ${bars('الزيارات باليوم', s.series.map((r) => ({ k: r.d.slice(5), n: r.n })))}
     ${bars('مصادر الزيارات', s.sources)}
     ${bars('الدول', s.countries)}
     ${bars('عمق التمرير — وصلوا حتى', s.funnel.map((r) => ({ k: r.k + '%', n: r.n })))}
+    ${bars('الأقسام التي وصلوها (زوار)', s.sections.map((r) => ({ k: (${secname})[r.k] || r.k, n: r.n })))}
+    ${s.campaigns.length ? `<div class="tablebox"><table style="min-width:0">
+      <thead><tr><th>الحملة (utm_campaign)</th><th>زيارات</th><th>واتساب</th><th>طلبات</th></tr></thead>
+      <tbody>${s.campaigns.map((c) => `<tr><td>${esc(c.k)}</td><td class="num">${c.visits}</td><td class="num">${c.wa}</td><td class="num">${c.submits}</td></tr>`).join('')}</tbody>
+    </table></div>` : ''}
     ${bars('اللغة', s.langs.map((r) => ({ k: langName[r.k] || r.k, n: r.n })))}
     ${bars('الجهاز', s.devices.map((r) => ({ k: devName[r.k] || r.k, n: r.n })))}`;
   $('#statDays').onchange = (e) => loadVisitors(Number(e.target.value)).catch(() => {});

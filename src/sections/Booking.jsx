@@ -68,7 +68,7 @@ export default function Booking() {
             {t('booking.form.success')}
           </p>
         ) : (
-          <form className="booking__form" onSubmit={onSubmit}>
+          <form className="booking__form" onSubmit={onSubmit} onFocusCapture={(e) => { if (!e.currentTarget.dataset.started) { e.currentTarget.dataset.started = '1'; hit('form_start') } }}>
             {/* Honeypot — humans never see it; the backend drops submissions that fill it. */}
             <label className="field" style={{ display: 'none' }} aria-hidden="true">
               <span className="field__label">Company</span>

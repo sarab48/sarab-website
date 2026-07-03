@@ -52,11 +52,11 @@ function sid() {
   } catch { return '' }
 }
 
-export function hit(t, v) {
+export function hit(t, v, x) {
   if (dnt()) return
   const a = attribution()
   const body = JSON.stringify({
-    t, v,
+    t, v, x,
     s: sid(),
     vi: vid(), // pseudonymous first-party id — counts returning visitors, identifies no one
     l: document.documentElement.lang || '',
@@ -86,6 +86,25 @@ export function initAnalytics() {
     })
   }
   addEventListener('scroll', onScroll, { passive: true })
+
+  // key sections reached (once per visit each) — the story-level funnel
+  const SECTIONS = { proof: '.proof', reels: '#reels', book: '#book' }
+  const seen = new Set()
+  const io = new IntersectionObserver((es) => {
+    for (const e of es) {
+      if (!e.isIntersecting) continue
+      const name = e.target.dataset.secname
+      if (!seen.has(name)) { seen.add(name); hit('section', undefined, name) }
+    }
+  }, { threshold: 0.35 })
+  const attach = () => {
+    for (const [name, sel] of Object.entries(SECTIONS)) {
+      const el = document.querySelector(sel)
+      if (el && !el.dataset.secname) { el.dataset.secname = name; io.observe(el) }
+    }
+  }
+  attach()
+  setTimeout(attach, 3000) // React sections mount after first paint
 
   // WhatsApp taps anywhere on the page
   addEventListener('click', (e) => {
