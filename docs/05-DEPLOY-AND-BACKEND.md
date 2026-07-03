@@ -324,3 +324,19 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
   Verified headless (`_voffice.mjs`: hidden on load → opens at left edge → closes via
   إغلاق/Escape, zero console errors; shots `docs/styleframes/voffice-{closed,open}.png`),
   playwright uninstalled after per the recipe, redeployed.
+
+### 2026-07-03 — Step 5 ✅ LAUNCHED 🎉
+- Production Pages project **sarab-website** (direct upload via wrangler; secret + D1
+  bound; `og:image` absolute). Access app "SARAB Office" `7a7535fe…` covers
+  apex/www/pages.dev `/office` (aud in `wrangler.toml`).
+- Owner attached **sarabaibooth.com + www** via the Pages custom-domain flow.
+  **DNS verified vs baseline: 0 removed/changed** — all 10 original production records
+  byte-identical; total additions across the whole session: 5 email records (approved
+  wizard) + 2 CNAMEs (apex/www → sarab-website.pages.dev). Snapshots in `ops/dns-snapshots/`.
+- Live probes: apex 200, www 200, `/api/book` ok, `/office` → Access 302,
+  `edit.sarabaibooth.com` alive/untouched. Bookings table = exactly the 56 real rows.
+- Code on GitHub (private): https://github.com/sarab48/sarab-website (deploys stay via
+  `wrangler pages deploy dist`; the repo is versioned backup).
+- Throwaway `sarab-preview` project + its Access app deleted.
+- Open (non-blocking): owner copy sign-offs — form error string, WhatsApp reply
+  templates (deferred by owner), privacy page wording.

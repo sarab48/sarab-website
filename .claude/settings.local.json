@@ -117,7 +117,9 @@
       "Bash(CLOUDFLARE_API_TOKEN=$\\(cat ~/.secrets/sarab-cf-token\\) CLOUDFLARE_ACCOUNT_ID=10fc6779cfbb420f1befa2f3d56443b9 npx wrangler d1 execute sarab-bookings --remote -y --command \"SELECT type, country, city, session FROM events ORDER BY id DESC LIMIT 1\" --json)",
       "Bash(git init *)",
       "Bash(git add *)",
-      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'SARAB website + booking backend + office dashboard \\(pre-launch state\\) *)"
+      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'SARAB website + booking backend + office dashboard \\(pre-launch state\\) *)",
+      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Launch: sarabaibooth.com live; progress log *)",
+      "Bash(git push *)"
     ]
   }
 }
