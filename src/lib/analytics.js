@@ -30,6 +30,17 @@ function captureAttribution() {
   } catch { /* storage may be blocked — fine */ }
 }
 
+function vid() {
+  try {
+    let v = localStorage.getItem('sarab-vid')
+    if (!v) {
+      v = Math.random().toString(36).slice(2) + Date.now().toString(36)
+      localStorage.setItem('sarab-vid', v)
+    }
+    return v
+  } catch { return '' }
+}
+
 function sid() {
   try {
     let v = sessionStorage.getItem(SID_KEY)
@@ -47,6 +58,7 @@ export function hit(t, v) {
   const body = JSON.stringify({
     t, v,
     s: sid(),
+    vi: vid(), // pseudonymous first-party id — counts returning visitors, identifies no one
     l: document.documentElement.lang || '',
     d: matchMedia('(pointer:coarse)').matches ? 'mobile' : 'desktop',
     r: a.r || '', us: a.us || '', um: a.um || '', uc: a.uc || '', f: a.f ? 1 : 0,

@@ -616,3 +616,11 @@ html.a11y-contrast{
 }
 .site-footer__ig:hover{border-color:var(--gold); box-shadow:0 8px 26px -10px var(--glow); transform:translateY(-2px)}
 .site-footer__igicon{width:1.15rem; height:1.15rem; display:block}
+
+/* Arabic/Hebrew: letter-spacing breaks cursive joining (e.g. "التقط" collapsed) — zero it. */
+html[lang='ar'] .step__t, html[lang='he'] .step__t,
+html[lang='ar'] .promise__lead, html[lang='he'] .promise__lead { letter-spacing: 0; }
+
+/* a11y button: smaller + translucent at rest so it never hides content beneath it */
+.a11y__btn{width:2.35rem; height:2.35rem; opacity:.55; transition:opacity .2s ease, border-color .2s ease}
+.a11y__btn:hover, .a11y__btn:focus-visible, .a11y.is-open .a11y__btn{opacity:1}

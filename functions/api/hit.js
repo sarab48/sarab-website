@@ -15,11 +15,11 @@ export async function onRequestPost({ request, env }) {
   const cf = request.cf || {}
   try {
     await env.DB.prepare(
-      `INSERT INTO events (type, session, lang, country, city, ref, utm_source, utm_medium,
+      `INSERT INTO events (type, session, visitor, lang, country, city, ref, utm_source, utm_medium,
                            utm_campaign, fbclid, device, value)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`
     ).bind(
-      b.t, s(b.s, 40), s(b.l, 8), cf.country || null, cf.city || null, s(b.r, 80),
+      b.t, s(b.s, 40), s(b.vi, 40), s(b.l, 8), cf.country || null, cf.city || null, s(b.r, 80),
       s(b.us, 60), s(b.um, 60), s(b.uc, 80), b.f ? 1 : 0, s(b.d, 10),
       Number.isFinite(Number(b.v)) ? Number(b.v) : null
     ).run()

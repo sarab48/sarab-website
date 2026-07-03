@@ -14,7 +14,9 @@ export async function onRequestGet({ request, env }) {
         (SELECT COUNT(*)                FROM events WHERE type='view'   AND ts >= datetime('now', ?1)) AS views,
         (SELECT COUNT(*)                FROM events WHERE type='wa'     AND ts >= datetime('now', ?1)) AS wa,
         (SELECT COUNT(*)                FROM events WHERE type='submit' AND ts >= datetime('now', ?1)) AS submits,
-        (SELECT ROUND(COALESCE(AVG(value),0)) FROM events WHERE type='time' AND ts >= datetime('now', ?1)) AS avg_time`),
+        (SELECT ROUND(COALESCE(AVG(value),0)) FROM events WHERE type='time' AND ts >= datetime('now', ?1)) AS avg_time,
+        (SELECT COUNT(*) FROM (SELECT visitor FROM events WHERE type='view' AND visitor IS NOT NULL AND ts >= datetime('now', ?1)
+           GROUP BY visitor HAVING COUNT(DISTINCT session) > 1)) AS returning`),
     q(`SELECT date(ts) AS d, COUNT(DISTINCT session) AS n FROM events
        WHERE type='view' AND ts >= datetime('now', ?1) GROUP BY d ORDER BY d`),
     q(`SELECT COALESCE(country,'؟') AS k, COUNT(DISTINCT session) AS n FROM events
@@ -28,7 +30,7 @@ export async function onRequestGet({ request, env }) {
     q(`SELECT CAST(value AS INTEGER) AS k, COUNT(DISTINCT session) AS n FROM events
        WHERE type='scroll' AND ts >= datetime('now', ?1) GROUP BY k ORDER BY k`),
     q(`SELECT COUNT(*) AS n FROM bookings
-       WHERE created_at >= datetime('now', ?1)
+       WHERE COALESCE(booked_at, event_date, substr(created_at,1,10)) >= date('now', ?1)
          AND (lead_source = 'إعلان ممول (Meta)' OR json_extract(extra, '$.attribution.fbclid') = 1)`),
   ])
 

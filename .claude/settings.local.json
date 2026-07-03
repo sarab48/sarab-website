@@ -119,7 +119,10 @@
       "Bash(git add *)",
       "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'SARAB website + booking backend + office dashboard \\(pre-launch state\\) *)",
       "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Launch: sarabaibooth.com live; progress log *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(CLOUDFLARE_API_TOKEN=$\\(cat ~/.secrets/sarab-cf-token\\) CLOUDFLARE_ACCOUNT_ID=10fc6779cfbb420f1befa2f3d56443b9 npx wrangler pages deploy dist --project-name=sarab-website --branch=main --commit-dirty=true)",
+      "Bash(node _pshot2.mjs)",
+      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Post-launch: AR letter-spacing fix, analytics windows + returning visitors, a11y button *)"
     ]
   }
 }

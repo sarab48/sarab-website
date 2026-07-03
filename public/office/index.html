@@ -616,7 +616,8 @@ function renderVisitors() {
       <div class="kpi"><b>${k.wa}</b><span>نقرات واتساب</span></div>
       <div class="kpi"><b>${k.submits}</b><span>طلبات من النموذج</span></div>
       <div class="kpi"><b>${k.avg_time || 0} ث</b><span>متوسط مدة الزيارة</span></div>
-      <div class="kpi gold"><b>${s.meta_leads}</b><span>عملاء من إعلانات ميتا</span></div>
+      <div class="kpi"><b>${k.returning || 0}</b><span>زوار عائدون (زاروا أكثر من مرة)</span></div>
+      <div class="kpi gold"><b>${s.meta_leads}</b><span>حجوزات من ميتا (بتاريخ الحجز الفعلي)</span></div>
     </section>
     ${bars('الزيارات باليوم', s.series.map((r) => ({ k: r.d.slice(5), n: r.n })))}
     ${bars('مصادر الزيارات', s.sources)}

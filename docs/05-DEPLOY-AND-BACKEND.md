@@ -340,3 +340,16 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
 - Throwaway `sarab-preview` project + its Access app deleted.
 - Open (non-blocking): owner copy sign-offs — form error string, WhatsApp reply
   templates (deferred by owner), privacy page wording.
+
+### 2026-07-03 — post-launch polish
+- **Arabic type rule (permanent lesson):** letter-spacing breaks cursive joining —
+  "التقط" collapsed on mobile AR. Zeroed tracking for AR/HE on `.step__t` +
+  `.promise__lead`; audit any future display text the same way. Verified live.
+- **Analytics semantics fixed:** "Meta leads" now windows on
+  `COALESCE(booked_at,event_date,created_at)` — the 33 were REAL imported Meta-sourced
+  bookings mis-windowed by import-date, not bad data (beacon events were never wrong).
+- **Returning visitors:** persistent first-party pseudonymous id (`localStorage sarab-vid`
+  → `events.visitor`); KPI "زوار عائدون" counts ids with 2+ sessions. Identifies no one;
+  covered by the privacy wording (usage data/statistics). DNT still honored.
+- **a11y button:** smaller + translucent at rest (opacity .55 → 1 on hover/open) so it
+  no longer covers the scroll cue.
