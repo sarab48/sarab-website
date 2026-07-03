@@ -596,8 +596,13 @@ function bars(title, rows) {
 
 let STATS = null;
 async function loadVisitors(days) {
-  STATS = await api('/office/api/stats?days=' + (days || 30));
-  renderVisitors();
+  try {
+    STATS = await api('/office/api/stats?days=' + (days || 30));
+    renderVisitors();
+  } catch (e) {
+    $('#visitors').innerHTML = '<div class="empty">تعذّر تحميل الإحصاءات — حدّث الصفحة</div>';
+    throw e;
+  }
 }
 function renderVisitors() {
   const s = STATS;
@@ -617,7 +622,7 @@ function renderVisitors() {
       <div class="kpi"><b>${k.submits}</b><span>طلبات من النموذج</span></div>
       <div class="kpi"><b>${k.avg_time || 0} ث</b><span>متوسط مدة الزيارة</span></div>
       <div class="kpi"><b>${k.returning || 0}</b><span>زوار عائدون (زاروا أكثر من مرة)</span></div>
-      <div class="kpi gold"><b>${s.meta_leads}</b><span>حجوزات من ميتا (بتاريخ الحجز الفعلي)</span></div>
+      <div class="kpi gold"><b>${s.meta_leads}</b><span>زيارات من إعلانات ميتا</span></div>
     </section>
     ${bars('الزيارات باليوم', s.series.map((r) => ({ k: r.d.slice(5), n: r.n })))}
     ${bars('مصادر الزيارات', s.sources)}

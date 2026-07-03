@@ -29,9 +29,9 @@ export async function onRequestGet({ request, env }) {
        WHERE type='view' AND ts >= datetime('now', ?1) GROUP BY k ORDER BY n DESC`),
     q(`SELECT CAST(value AS INTEGER) AS k, COUNT(DISTINCT session) AS n FROM events
        WHERE type='scroll' AND ts >= datetime('now', ?1) GROUP BY k ORDER BY k`),
-    q(`SELECT COUNT(*) AS n FROM bookings
-       WHERE COALESCE(booked_at, event_date, substr(created_at,1,10)) >= date('now', ?1)
-         AND (lead_source = 'إعلان ممول (Meta)' OR json_extract(extra, '$.attribution.fbclid') = 1)`),
+    q(`SELECT COUNT(DISTINCT session) AS n FROM events
+       WHERE type='view' AND ts >= datetime('now', ?1)
+         AND (fbclid = 1 OR lower(COALESCE(utm_source,'')) IN ('facebook','fb','instagram','ig','meta'))`),
   ])
 
   return Response.json({
