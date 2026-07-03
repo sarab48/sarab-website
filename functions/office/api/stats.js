@@ -16,7 +16,7 @@ export async function onRequestGet({ request, env }) {
         (SELECT COUNT(*)                FROM events WHERE type='submit' AND ts >= datetime('now', ?1)) AS submits,
         (SELECT ROUND(COALESCE(AVG(value),0)) FROM events WHERE type='time' AND ts >= datetime('now', ?1)) AS avg_time,
         (SELECT COUNT(*) FROM (SELECT visitor FROM events WHERE type='view' AND visitor IS NOT NULL AND ts >= datetime('now', ?1)
-           GROUP BY visitor HAVING COUNT(DISTINCT session) > 1)) AS returning`),
+           GROUP BY visitor HAVING COUNT(DISTINCT session) > 1)) AS came_back`),
     q(`SELECT date(ts) AS d, COUNT(DISTINCT session) AS n FROM events
        WHERE type='view' AND ts >= datetime('now', ?1) GROUP BY d ORDER BY d`),
     q(`SELECT COALESCE(country,'؟') AS k, COUNT(DISTINCT session) AS n FROM events
