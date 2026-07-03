@@ -125,7 +125,11 @@
       "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Post-launch: AR letter-spacing fix, analytics windows + returning visitors, a11y button *)",
       "Bash(node --check /tmp/claude-1000/-home-admin9-HADDAD-TECH-PROJECTS-sarab-website/646f618b-3f0a-44ba-9b97-e6b5c88e7eab/scratchpad/office.js)",
       "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Title: SARAB — AI Photobooth *)",
-      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'og/twitter title: SARAB — AI Photobooth *)"
+      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'og/twitter title: SARAB — AI Photobooth *)",
+      "Bash(convert public/assets/brand/brand-name-logo.jpg -resize 580x580 -gravity center -background \"srgb\\(247,243,234\\)\" -extent 1200x630 -quality 88 -strip public/og-brand.jpg)",
+      "Bash(identify public/og-brand.jpg)",
+      "Bash(awk '{print $3, $7}')",
+      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'OG share image: new brand-name logo \\(og-brand.jpg\\) *)"
     ]
   }
 }
