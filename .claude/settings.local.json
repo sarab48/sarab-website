@@ -124,7 +124,8 @@
       "Bash(node _pshot2.mjs)",
       "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Post-launch: AR letter-spacing fix, analytics windows + returning visitors, a11y button *)",
       "Bash(node --check /tmp/claude-1000/-home-admin9-HADDAD-TECH-PROJECTS-sarab-website/646f618b-3f0a-44ba-9b97-e6b5c88e7eab/scratchpad/office.js)",
-      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Title: SARAB — AI Photobooth *)"
+      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Title: SARAB — AI Photobooth *)",
+      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'og/twitter title: SARAB — AI Photobooth *)"
     ]
   }
 }
