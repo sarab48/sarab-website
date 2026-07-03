@@ -1,0 +1,182 @@
+Prompt: "Create a futuristic cyberpunk portfolio website with glitch transitions, floating 3D typography, cinematic scroll storytelling, dark experimental interfaces and a high-tech hacker aesthetic"
+
+Use Three.js + WebGL to render floating 3D symbols, abstract structures and immersive environmental effects directly in the browser
+
+Use GSAP + ScrollTrigger for cinematic section reveals, glitch transitions and layered parallax storytelling throughout the experience
+
+Use custom particle systems, pixel distortion effects and procedural animations to create a digital underground aesthetic
+
+Use dark UI panels, floating system elements and minimal data overlays so the interface feels like a classified operating system
+
+Use shader effects, noise textures and realtime visual distortions to make every interaction feel alive and unpredictable
+
+Use animated typography breakdowns, fragmented symbols and morphing logo sequences to create a memorable visual identity
+
+Use Lenis for ultra smooth scrolling and seamless transitions between sections
+
+Use monochrome visuals with red accent highlights to achieve a futuristic cyberpunk atmosphere without overwhelming the user
+
+Fine tune animation timing (0.4s–1s), motion blur and easing curves for a premium interactive experience
+
+
+Prompt: "Create a premium AI company website with floating 3D elements, abstract intelligence visualizations, cinematic storytelling, soft-glow aesthetics, human-AI symbolism and a futuristic Apple-meets-sci-fi design language"
+
+Use Three.js + WebGL to render floating 3D objects, neural systems and immersive visual elements directly in the browser
+
+Use cinematic transitions and smooth scene changes to guide users through the story of the product
+
+Use abstract particle systems, energy fields and intelligence-inspired animations to visualize AI concepts
+
+Use premium glassmorphism UI and minimal layouts to create a clean futuristic aesthetic
+
+Use custom 3D human models, floating interfaces and dynamic product showcases to make the experience feel alive
+
+Use GSAP + ScrollTrigger for smooth reveals, layered motion and cinematic section transitions
+
+Use soft lighting, volumetric effects and subtle gradients to create a premium next-generation feel
+
+Use oversized typography and storytelling-focused layouts inspired by Apple product launches
+
+Fine tune animation timing and motion design so every interaction feels intentional and immersive
+
+
+Prompt: "Create a futuristic AI experience where glowing butterflies move through clouds as users scroll"
+
+Use Three.js + WebGL to render the butterfly scenes in real time
+
+Use GSAP + ScrollTrigger for smooth cinematic transitions
+
+Add volumetric clouds + ambient glow for the dreamy atmosphere
+
+Fluid butterfly animations make the whole experience feel alive
+
+
+Prompt: "Create a futuristic product launch website for a luxury cork coaster with immersive 3D visuals, cinematic scroll storytelling, floating UI systems and a premium industrial sci-fi aesthetic"
+
+Use Three.js + WebGL to render realtime 3D coaster visuals, floating product rotations and cinematic environmental scenes directly in the browser
+
+Use GSAP + ScrollTrigger for cinematic section reveals, smooth transitions and layered parallax storytelling across the experience
+
+Use Blender/Spline exported assets + macro product closeups to make a literal coaster feel like futuristic luxury hardware
+
+Use glassmorphism UI + oversized typography so the interface feels like a premium AI product launch campaign
+
+Use thermal-inspired gradients, glowing ambient lighting and abstract motion backgrounds to make the “AI-powered coaster” concept feel absurdly serious
+
+Use interactive lifestyle showcases, wearable mockups and editorial-style galleries to blur the line between product website and fashion campaign
+
+Use Lenis for ultra smooth scrolling and cinematic motion feel across the entire experience
+
+Use staggered typography animations + minimal industrial layouts to create that Apple/Tesla style storytelling aesthetic
+
+Fine tune animation timing (0.6s–1.2s), blur transitions and easing curves for a polished sci-fi commercial feel
+
+
+Prompt: "Create a cinematic renaissance-style digital world where classical paintings blend with floating streetwear products, surreal landscapes, luxury fashion energy and immersive editorial storytelling"
+
+Use Three.js + WebGL to place floating sneakers, skateboards and shopping bags directly inside classical painting environments
+
+Use GSAP + ScrollTrigger for cinematic transitions where scenes morph like an interactive fashion film
+
+Use Lenis for buttery smooth scrolling so the experience feels like drifting through a digital museum
+
+Use Blender/Spline exported GLTF models for realistic floating products and physics-inspired motion
+
+Mix renaissance artwork with modern streetwear objects to create a contrast that feels artistic and futuristic at the same time
+
+Use oversized editorial typography + elegant serif fonts for that luxury campaign aesthetic
+
+Layer subtle particles, bloom lighting and atmospheric fog to make the environment feel dreamy and alive
+
+Use parallax depth + floating foreground/background assets so every scroll section feels immersive in 3D space
+
+Fine tune easing + transition timing to give every movement that premium cinematic feel
+
+
+Prompt: "Create a futuristic logistics platform with immersive 3D truck visualizations, wireframe transitions, cinematic scroll storytelling, floating UI systems and a premium industrial sci-fi aesthetic"
+
+Use Three.js + WebGL to render realtime 3D trucks, warehouses and environmental scenes directly in the browser
+
+Use GSAP + ScrollTrigger for cinematic section reveals, smooth camera movement and layered parallax transitions
+
+Use spline/Blender exported GLTF assets for the trucks and industrial environments to create depth and realism
+
+Use glassmorphism UI + floating grid systems so the interface feels like a futuristic operating system
+
+Use particle systems, glowing wireframes and abstract motion backgrounds to make the AI/data sections feel alive
+
+Use Lenis or Locomotive Scroll for ultra smooth scrolling and premium motion feel across the whole experience
+
+Use staggered typography animations + oversized minimal layouts to create that agency-level storytelling style
+
+Fine tune animation timing (0.6s–1.2s) and easing curves for a cinematic Apple/Tesla type experience
+
+
+Prompt: "Create a dark cinematic interface for an AI-powered digital world with floating 3D objects, brutal typography, and immersive transitions"
+
+Use Three.js for the floating mesh animations + particle effects
+
+Use GSAP + ScrollTrigger to create smooth scene reveals and section transitions
+
+Add oversized typography + high contrast layouts for that futuristic editorial feel
+
+Use blur, glow, gradients, and soft lighting to make the UI feel alive
+
+Keep interactions minimal and cinematic instead of overloading animations
+
+Built to feel like you’re exploring an AI operating system, not just a website
+
+
+Prompt: "Create an experimental animation studio website with oversized brutalist typography, fast editorial transitions, immersive animated showcases and a clean monochrome layout mixed with bold red accents"
+
+Use smooth horizontal transitions + dynamic scrolling interactions to make the website feel like a digital art exhibition
+
+Use oversized typography, cinematic frames and layered visual compositions to create a modern creative agency aesthetic
+
+The minimal white layout mixed with chaotic motion and vibrant animation previews makes every section feel energetic and alive
+
+Sharp typography, clean grids and fast-paced transitions give the whole experience a premium studio portfolio vibe
+
+
+Prompt: "Create an immersive sci-fi inspired website with floating holographic interfaces, cinematic particle simulations, abstract 3D environments and experimental UI interactions that feel like a next-gen digital universe"
+
+Use WebGL/Three.js inspired visuals with fluid motion systems and glowing particle effects to create a surreal atmosphere
+
+Use floating glassmorphism cards + layered depth animations to make the interface feel alive and interactive
+
+The dark cinematic aesthetic mixed with neon gradients and immersive transitions creates a futuristic gaming/movie intro vibe
+
+Experimental motion, abstract compositions and smooth camera-like transitions make the whole experience feel unreal
+
+
+Prompt: "Create an immersive racing website where interactive helmets reveal the driver’s real face through smooth hover animations and cinematic transitions"
+
+Use Three.js + WebGL to render the helmet interactions and immersive galleries in real time
+
+Use GSAP + ScrollTrigger for smooth scene transitions and motion driven storytelling
+
+Add kinetic typography + bold racing visuals to create the high energy Formula 1 atmosphere
+
+Fluid hover effects and interactive product showcases make the whole experience feel futuristic
+
+
+Prompt: "Create an ultra minimal creative studio website with oversized typography, chaotic motion transitions and immersive editorial visuals that feel like a luxury fashion campaign"
+
+Use GSAP + smooth scroll animations to create fluid transitions between campaigns and layouts
+
+Use layered motion typography + dynamic image masking to make every section feel alive
+
+Minimal black and white layouts mixed with bold visuals create the high fashion aesthetic
+
+The fast cuts, oversized text and experimental composition make the whole experience feel like an interactive moodboard
+
+
+Prompt: "Create a cinematic Web3 website with floating particle tunnels and smooth motion that feels immersive on scroll"
+
+Use Three.js + WebGL to render the flowing particle structures in real time
+
+Use GSAP + ScrollTrigger for smooth cinematic transitions between sections
+
+Add ambient glow + soft grain to create the dark atmospheric look
+
+Fluid motion and minimal typography make the whole experience feel premium

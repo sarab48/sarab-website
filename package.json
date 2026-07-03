@@ -1,0 +1,31 @@
+{
+  "name": "sarab-website",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "SARAB — immersive single-page site for the first AI photobooth in the region.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@fontsource/aref-ruqaa": "^5.2.8",
+    "@fontsource/assistant": "^5.2.9",
+    "@fontsource/cinzel": "^5.2.8",
+    "@fontsource/cormorant-garamond": "^5.2.11",
+    "@fontsource/frank-ruhl-libre": "^5.2.8",
+    "@fontsource/hanken-grotesk": "^5.2.8",
+    "@fontsource/tajawal": "^5.2.7",
+    "gsap": "^3.12.5",
+    "lenis": "^1.1.18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11",
+    "wrangler": "^4.86.0"
+  }
+}

@@ -1,0 +1,65 @@
+/*
+  SARAB design tokens — LOCKED at Phase 2 (Warm Cinematic direction).
+  Source of truth for palette/type/motion. Palette derived from docs/ASSET-ANALYSIS.md.
+  Direction: deep espresso "void" beats alternate with champagne "light" beats; the
+  before/after afters glow warm against the dark. Type swaps per active language.
+*/
+:root {
+  /* —— Warm "mirage" palette —— */
+  --canvas-deep: #14100b;   /* warm near-black espresso — hero & before/after frame */
+  --canvas-ink:  #1e170f;   /* lifted panel brown */
+  --canvas-2:    #271d12;   /* raised surface / cards on dark */
+  --cream:       #f3e9d8;   /* champagne light-section surface */
+  --ivory:       #fbf6ec;   /* lightest text on dark / paper */
+  --gold:        #c9a24e;   /* primary accent — wordmark gold, glow, CTAs */
+  --gold-bright: #e3c878;   /* highlight gold (shimmer crest) */
+  --bronze:      #a57743;   /* logo-true bronze; borders, secondary accent */
+  --caramel:     #c2a179;   /* mid warm tone, gradients, muted text on dark */
+  --espresso-text: #2a1e12; /* body text on cream */
+  --rose:        #d8b4a6;   /* soft rose accent (from rose-wall afters) */
+
+  --glow: rgba(201, 162, 78, 0.45);          /* gold bloom */
+  --hairline: color-mix(in srgb, var(--bronze) 38%, transparent);
+
+  /* —— Type — Latin defaults; overridden per [lang] below —— */
+  --font-display: 'Cinzel', 'Times New Roman', serif;          /* wide roman caps, wordmark spirit */
+  --font-brand: 'Cinzel', 'Times New Roman', serif;             /* SARAB wordmark — fixed Latin, NEVER overridden per-lang */
+  --font-editorial: 'Cormorant Garamond', Georgia, serif;       /* large italic accent lines */
+  --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --tracking-display: 0.12em;   /* generous tracking suits Cinzel; tightened for ar/he */
+
+  /* —— Motion primitives —— */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-emph: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 0.4s;
+  --dur-mid: 0.8s;
+  --dur-slow: 1.2s;
+
+  /* —— Spacing scale —— */
+  --space-1: 0.5rem;
+  --space-2: 1rem;
+  --space-3: 2rem;
+  --space-4: 4rem;
+  --space-5: 8rem;
+
+  /* —— Layout —— */
+  --measure: 60ch;
+  --gutter: clamp(1.25rem, 5vw, 5rem);
+}
+
+/* Arabic — calligraphic display, clean modern body. Tighter tracking (Arabic sets wide). */
+html[lang='ar'] {
+  --font-display: 'Aref Ruqaa', 'Times New Roman', serif;
+  --font-editorial: 'Aref Ruqaa', serif;
+  --font-body: 'Tajawal', ui-sans-serif, system-ui, sans-serif;
+  --tracking-display: 0;
+}
+
+/* Hebrew — high-contrast serif display, clean body. */
+html[lang='he'] {
+  --font-display: 'Frank Ruhl Libre', Georgia, serif;
+  --font-editorial: 'Frank Ruhl Libre', serif;
+  --font-body: 'Assistant', ui-sans-serif, system-ui, sans-serif;
+  --tracking-display: 0;
+}

@@ -1,0 +1,22 @@
+# Cloudflare Pages config — SARAB website (see docs/05-DEPLOY-AND-BACKEND.md).
+# `name` points at the throwaway Step-1 preview project; at Step 5 the real
+# GitHub-connected project replaces it — update `name` then.
+name = "sarab-preview"
+compatibility_date = "2026-05-01"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sarab-bookings"
+database_id = "1557e480-9c59-4264-a363-183580c00156"
+
+# Non-secret runtime config for functions/api/book.js.
+# The email token is NOT here — it is an encrypted secret: `wrangler pages secret put EMAIL_API_TOKEN`.
+[vars]
+CF_ACCOUNT_ID = "10fc6779cfbb420f1befa2f3d56443b9"
+EMAIL_FROM = "bookings@sarabaibooth.com"
+EMAIL_TO = "sarabtech8@gmail.com"
+# Cloudflare Access (protects /office): team + this app's audience tag.
+# App "SARAB Office (preview)" id 4613ab44-db54-4ce7-96b1-ae900d9b82b8 — re-scope at Step 5.
+ACCESS_TEAM_DOMAIN = "sarabtech.cloudflareaccess.com"
+ACCESS_AUD = "c15f08466118ae6122f4bcf24f66700d018138ff8f3e2ff51554b8ba09819ff8"

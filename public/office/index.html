@@ -1,0 +1,947 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>سراب · مكتب الحجوزات</title>
+<style>
+  :root{
+    --bg:#14100B; --panel:#1E170F; --panel-2:#241B11; --line:rgba(201,162,78,.16);
+    --text:#F3E9D8; --muted:#C2A179; --gold:#C9A24E; --bronze:#A57743; --ivory:#FBF6EC;
+    --ok:#86B98A; --info:#7FB3C9; --warn:#C97B6A;
+    --r:12px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--text); min-height:100vh;
+    font:15px/1.55 "Segoe UI", Tahoma, "Noto Sans Arabic", "Noto Kufi Arabic", system-ui, sans-serif;
+  }
+  a{color:var(--gold)}
+  button{font:inherit; cursor:pointer}
+  input,select,textarea{
+    font:inherit; color:var(--text); background:var(--panel-2);
+    border:1px solid var(--line); border-radius:8px; padding:.5rem .65rem; width:100%;
+    color-scheme:dark;
+  }
+  input:focus,select:focus,textarea:focus{outline:2px solid rgba(201,162,78,.45); outline-offset:1px}
+  ::placeholder{color:rgba(194,161,121,.55)}
+
+  header{
+    display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+    padding:.9rem 1.2rem; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, #1A140C, var(--bg));
+    position:sticky; top:0; z-index:20;
+  }
+  .brand{display:flex; align-items:baseline; gap:.6rem}
+  .brand b{font-size:1.25rem; letter-spacing:.06em; color:var(--gold)}
+  .brand span{color:var(--muted); font-size:.85rem}
+  .who{margin-inline-start:auto; color:var(--muted); font-size:.8rem}
+  .btn{
+    background:var(--gold); color:#231A0E; border:none; border-radius:999px;
+    padding:.5rem 1.1rem; font-weight:700;
+  }
+  .btn:hover{filter:brightness(1.08)}
+  .btn--ghost{background:transparent; color:var(--gold); border:1px solid var(--line)}
+
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:.8rem; padding:1rem 1.2rem}
+  .kpi{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:.8rem 1rem}
+  .kpi b{display:block; font-size:1.5rem; color:var(--ivory)}
+  .kpi span{color:var(--muted); font-size:.8rem}
+  .kpi.gold b{color:var(--gold)}
+
+  nav.tabs{display:flex; gap:.4rem; padding:0 1.2rem; border-bottom:1px solid var(--line); overflow-x:auto; scrollbar-width:none}
+  nav.tabs button{white-space:nowrap}
+  nav.tabs button{
+    background:none; border:none; color:var(--muted); padding:.6rem 1rem;
+    border-bottom:2px solid transparent; font-weight:600;
+  }
+  nav.tabs button.on{color:var(--gold); border-bottom-color:var(--gold)}
+
+  .filters{display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; padding:.9rem 1.2rem}
+  .filters .search{max-width:280px}
+  .chips{display:flex; gap:.35rem; flex-wrap:wrap}
+  .chip{
+    background:var(--panel); color:var(--muted); border:1px solid var(--line);
+    border-radius:999px; padding:.3rem .8rem; font-size:.82rem;
+  }
+  .chip.on{color:#231A0E; background:var(--gold); border-color:var(--gold); font-weight:700}
+  .chip.ex{color:#FFD9D2; background:rgba(201,60,40,.4); border-color:transparent; text-decoration:line-through; font-weight:700}
+  .filters select{width:auto}
+  label.toggle{display:flex; gap:.35rem; align-items:center; color:var(--muted); font-size:.85rem; white-space:nowrap}
+  label.toggle input{width:auto}
+  .count{color:var(--muted); font-size:.8rem; margin-inline-start:auto}
+
+  .wrap{padding:0 1.2rem 4rem}
+  .tablebox{overflow-x:auto; border:1px solid var(--line); border-radius:var(--r); background:var(--panel)}
+  table{border-collapse:collapse; width:100%; min-width:960px}
+  th,td{padding:.55rem .7rem; text-align:start; border-bottom:1px solid var(--line); white-space:nowrap}
+  th{color:var(--muted); font-size:.78rem; font-weight:600; position:sticky; top:0; background:var(--panel); z-index:1}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:rgba(201,162,78,.06)}
+  td.num{font-variant-numeric:tabular-nums}
+  .badge{border-radius:999px; padding:.15rem .6rem; font-size:.76rem; font-weight:700; display:inline-block}
+  .muted{color:var(--muted)}
+  .wa{
+    display:inline-grid; place-items:center; width:1.7rem; height:1.7rem; border-radius:999px;
+    border:1px solid var(--line); color:var(--ok); text-decoration:none; font-size:.9rem;
+  }
+  .wa:hover{border-color:var(--ok)}
+  .empty{padding:2.2rem; text-align:center; color:var(--muted)}
+
+  /* drawer */
+  .scrim{position:fixed; inset:0; background:rgba(10,7,4,.6); backdrop-filter:blur(2px); z-index:30; display:none}
+  /* Physical coordinates on purpose: translateX is physical, so the inset must be too
+     (mixing logical insets with physical transforms is the RTL bug documented in
+     ASSET-ANALYSIS §Phase 5.1). Drawer lives on the LEFT edge (inline-end in RTL). */
+  .drawer{
+    position:fixed; top:0; bottom:0; left:0; width:min(560px,100vw);
+    background:var(--panel); border-right:1px solid var(--line); z-index:31;
+    transform:translateX(-110%); visibility:hidden;
+    transition:transform .25s ease, visibility 0s .25s;
+    display:flex; flex-direction:column;
+  }
+  .drawer.open{transform:none; visibility:visible; transition:transform .25s ease}
+  .scrim.open{display:block}
+  .drawer header{position:static; background:var(--panel-2); padding:.8rem 1.1rem}
+  .drawer h2{margin:0; font-size:1.05rem; color:var(--gold)}
+  .drawer .body{overflow-y:auto; padding:1rem 1.1rem; display:grid; grid-template-columns:1fr 1fr; gap:.7rem .8rem; align-content:start}
+  .drawer .full{grid-column:1 / -1}
+  .field label{display:block; color:var(--muted); font-size:.76rem; margin-bottom:.25rem}
+  .drawer footer{
+    padding: .8rem 1.1rem; border-top:1px solid var(--line); display:flex; gap:.6rem; align-items:center;
+    background:var(--panel-2);
+  }
+  .drawer footer .meta{color:var(--muted); font-size:.72rem; margin-inline-start:auto; text-align:end}
+
+  /* pricing manager + drawer intel */
+  .pricing{display:grid; gap:1rem}
+  .pricing table{min-width:0; width:100%}
+  .pricing td{white-space:normal}
+  .pricing input.name{max-width:240px}
+  .pricing input.price{max-width:110px}
+  .pricing select{width:auto}
+  .addrow{display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; padding:.7rem}
+  .addrow input{width:auto}
+  .btn--sm{padding:.35rem .8rem; font-size:.82rem}
+  .btn--danger{background:transparent; color:var(--warn); border:1px solid var(--line)}
+  .intel{
+    background:rgba(201,162,78,.07); border:1px solid var(--line); border-radius:10px;
+    padding:.7rem .8rem; display:grid; gap:.45rem; font-size:.88rem;
+  }
+  .intel .ok{color:var(--ok)}
+  .intel .busy{color:var(--warn)}
+  .intel .actions{display:flex; gap:.5rem; flex-wrap:wrap}
+
+  /* red flag on dates that carry 2+ live bookings */
+  .dateflag{color:#FF8A7A; font-weight:800}
+  .dateflag::before{content:'⚠ '}
+
+  /* expandable row editor (finance / inventory) */
+  .editgrid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.6rem;
+    padding:.8rem; background:var(--panel-2); border-radius:10px; margin:.3rem 0;
+  }
+  .editgrid .acts{grid-column:1 / -1; display:flex; gap:.5rem; flex-wrap:wrap}
+  tr.fedit>td{background:rgba(201,162,78,.05); white-space:normal}
+  .neg{color:var(--warn)} .pos{color:var(--ok)}
+
+  /* analytics bars */
+  .bar{display:grid; grid-template-columns:minmax(90px,auto) 1fr auto; gap:.6rem; align-items:center; padding:.25rem 0; font-size:.85rem}
+  .bar i{display:block; height:8px; background:var(--gold); border-radius:4px; min-width:2px}
+  .bar b{font-variant-numeric:tabular-nums}
+  .statbox{padding:.8rem 1rem}
+  .statbox>b{display:block; color:var(--muted); font-size:.8rem; margin-bottom:.4rem}
+
+  /* smartphone: bookings become cards */
+  @media (max-width:720px){
+    #grid{min-width:0}
+    #gridbox{border:none; background:transparent; overflow:visible}
+    #grid thead{display:none}
+    #grid, #grid tbody{display:block}
+    #grid tbody tr{
+      display:block; border:1px solid var(--line); border-radius:12px;
+      margin-block-end:.6rem; padding:.4rem .7rem; background:var(--panel);
+    }
+    #grid tbody td{
+      display:flex; justify-content:space-between; align-items:baseline; gap:1rem;
+      border:none; padding:.26rem 0; white-space:normal; text-align:end;
+    }
+    #grid tbody td::before{content:attr(data-l); color:var(--muted); font-size:.74rem; white-space:nowrap}
+  }
+
+  #toast{
+    position:fixed; bottom:1.2rem; left:50%; transform:translateX(-50%);
+    background:var(--gold); color:#231A0E; font-weight:700; border-radius:999px;
+    padding:.55rem 1.2rem; z-index:50; display:none;
+  }
+  #toast.err{background:var(--warn); color:#2B120C}
+  #veil{position:fixed; inset:0; display:none; place-items:center; background:var(--bg); z-index:60; text-align:center; padding:2rem}
+  @media (max-width:640px){ .drawer .body{grid-template-columns:1fr} .filters .search{max-width:none; flex:1} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><b>سراب</b><span>مكتب الحجوزات</span></div>
+  <button class="btn" id="newBtn">+ حجز جديد</button>
+  <button class="btn btn--ghost" id="refreshBtn" title="تحديث">تحديث</button>
+  <span class="who" id="who"></span>
+</header>
+
+<section class="kpis" id="kpis"></section>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="bookings" class="on">الحجوزات</button>
+  <button data-tab="callback">إعادة الاتصال</button>
+  <button data-tab="finance">المالية</button>
+  <button data-tab="inventory">المخزون</button>
+  <button data-tab="visitors">الزوار</button>
+  <button data-tab="capi">ميتا CAPI</button>
+  <button data-tab="cities">أسعار المدن</button>
+</nav>
+
+<section class="filters" id="filters">
+  <input class="search" id="q" type="search" placeholder="بحث: اسم، هاتف، رقم، مدينة…">
+  <div class="chips" id="statusChips"></div>
+  <select id="month"><option value="">كل الشهور</option></select>
+  <label class="toggle"><input type="checkbox" id="upcoming"> القادمة فقط</label>
+  <label class="toggle"><input type="checkbox" id="nopast"> إخفاء الماضية</label>
+  <select id="order">
+    <option value="date">حسب تاريخ المناسبة</option>
+    <option value="new">الأحدث إضافةً</option>
+  </select>
+  <button class="btn btn--ghost btn--sm" id="csvBtn" title="تنزيل النتائج الحالية كملف CSV">CSV ⬇</button>
+  <span class="count" id="count"></span>
+</section>
+
+<main class="wrap">
+  <div class="tablebox" id="gridbox"><table id="grid">
+    <thead><tr>
+      <th>الرقم</th><th>الاسم</th><th>الهاتف</th><th>تاريخ المناسبة</th><th>النوع</th>
+      <th>المدينة</th><th>القاعة</th><th>الحالة</th><th>الدفع</th><th>المتبقي</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <div class="pricing" id="pricing" style="display:none"></div>
+  <div class="pricing" id="finance" style="display:none"></div>
+  <div class="pricing" id="inventory" style="display:none"></div>
+  <div class="pricing" id="visitors" style="display:none"></div>
+  <div class="pricing" id="capi" style="display:none"></div>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="تفاصيل الحجز">
+  <header><h2 id="dTitle">حجز</h2></header>
+  <div class="body" id="dBody"></div>
+  <footer>
+    <button class="btn" id="saveBtn">حفظ</button>
+    <a class="btn btn--ghost" id="waBtn" target="_blank" rel="noopener">واتساب</a>
+    <button class="btn btn--ghost" id="closeBtn">إغلاق</button>
+    <button class="btn btn--danger btn--sm" id="delBtn" style="display:none">حذف</button>
+    <span class="meta" id="dMeta"></span>
+  </footer>
+</aside>
+
+<div id="toast" role="status"></div>
+<div id="veil"><div>
+  <h2 style="color:var(--gold)">الجلسة غير مصرّح بها</h2>
+  <p class="muted">افتح المكتب عبر الرابط المحمي وسجّل الدخول ببريدك، ثم أعد تحميل الصفحة.</p>
+</div></div>
+
+<script>
+'use strict';
+const $ = (s, el=document) => el.querySelector(s);
+const $$ = (s, el=document) => [...el.querySelectorAll(s)];
+
+const STATUS_COLORS = {
+  'استفسار':   ['rgba(194,161,121,.16)', '#C2A179'],
+  'عرض سعر':   ['rgba(201,162,78,.16)',  '#C9A24E'],
+  'مؤكد':      ['rgba(134,185,138,.16)', '#86B98A'],
+  'دفع العربون':['rgba(127,179,201,.16)','#7FB3C9'],
+  'مكتمل':     ['rgba(165,119,67,.2)',   '#BE9668'],
+  'ملغي':      ['rgba(201,123,106,.16)', '#C97B6A'],
+};
+
+const state = { meta:null, rows:[], conflicts:new Set(), tab:'bookings', filters:{ q:'', statusIn:[], statusEx:[], month:'', upcoming:false, nopast:false, order:'date' }, editing:null, remainTouched:false };
+
+async function api(path, opts={}) {
+  const res = await fetch(path, { headers:{'Content-Type':'application/json'}, ...opts });
+  if (res.status === 403) { $('#veil').style.display='grid'; throw new Error('unauthorized'); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.ok === false) throw new Error(data.error || res.status);
+  return data;
+}
+
+const money = (v) => (v === null || v === undefined || v === '') ? '—'
+  : new Intl.NumberFormat('en-US').format(Number(v)) + ' ₪';
+const dmy = (iso) => {
+  if (!iso) return '—';
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso);
+};
+const waLink = (phone) => {
+  const d = String(phone || '').replace(/\D/g, '');
+  if (d.length < 9) return null;
+  return 'https://wa.me/' + (d.startsWith('0') ? '972' + d.slice(1) : d);
+};
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function toast(msg, err=false) {
+  const t = $('#toast');
+  t.textContent = msg; t.className = err ? 'err' : ''; t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2600);
+}
+
+// ---------- rendering ----------
+
+function renderKpis() {
+  const k = state.meta.kpi;
+  $('#kpis').innerHTML = `
+    <div class="kpi gold"><b>${k.upcoming}</b><span>مواعيد مؤكدة قادمة</span></div>
+    <div class="kpi"><b>${k.inquiries}</b><span>استفسارات مفتوحة</span></div>
+    <div class="kpi"><b>${k.quotes}</b><span>عروض سعر</span></div>
+    <div class="kpi gold"><b>${money(k.outstanding)}</b><span>مبالغ متبقية للتحصيل</span></div>`;
+}
+
+function renderChips() {
+  const box = $('#statusChips');
+  const counts = state.meta.statusCounts || {};
+  const statuses = (state.meta.options.status || []);
+  const f = state.filters;
+  const cls = (s) => f.statusIn.includes(s) ? ' on' : f.statusEx.includes(s) ? ' ex' : '';
+  box.innerHTML = `<button class="chip${!f.statusIn.length && !f.statusEx.length ? ' on' : ''}" data-s="">الكل</button>` +
+    statuses.map((s) => `<button class="chip${cls(s)}" data-s="${esc(s)}"
+      title="اضغط: تضمين · مرة ثانية: استبعاد ✕ · ثالثة: إلغاء">${esc(s)}${counts[s] ? ` · ${counts[s]}` : ''}</button>`).join('');
+  $$('.chip', box).forEach((b) => b.onclick = () => {
+    const s = b.dataset.s;
+    if (!s) { f.statusIn = []; f.statusEx = []; }
+    else if (f.statusIn.includes(s)) { f.statusIn = f.statusIn.filter((x) => x !== s); f.statusEx.push(s); }
+    else if (f.statusEx.includes(s)) { f.statusEx = f.statusEx.filter((x) => x !== s); }
+    else f.statusIn.push(s);
+    renderChips();
+    loadRows();
+  });
+}
+
+function renderMonths() {
+  const sel = $('#month');
+  const cur = state.filters.month;
+  sel.innerHTML = '<option value="">كل الشهور</option>' +
+    (state.meta.months || []).map((m) => `<option value="${m}" ${m===cur?'selected':''}>${m.split('-')[1]} / ${m.split('-')[0]}</option>`).join('');
+}
+
+function badge(s) {
+  const [bg, fg] = STATUS_COLORS[s] || ['rgba(194,161,121,.12)', 'var(--muted)'];
+  return `<span class="badge" style="background:${bg};color:${fg}">${esc(s || '—')}</span>`;
+}
+
+function renderRows() {
+  const tb = $('#grid tbody');
+  if (!state.rows.length) {
+    tb.innerHTML = `<tr><td colspan="10"><div class="empty">لا نتائج</div></td></tr>`;
+  } else {
+    tb.innerHTML = state.rows.map((r) => {
+      const wa = waLink(r.phone);
+      const clash = r.event_date && r.status !== 'ملغي' && state.conflicts.has(r.event_date);
+      return `<tr data-id="${r.id}">
+        <td data-l="الرقم" class="num muted">${esc(r.booking_no || '—')}</td>
+        <td data-l="الاسم"><b>${esc(r.name || [r.first_name, r.last_name].filter(Boolean).join(' ') || '—')}</b>${r.source==='website' ? ' <span class="muted" style="font-size:.7rem">من الموقع</span>':''}</td>
+        <td data-l="الهاتف" class="num">${esc(r.phone || '—')} ${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="واتساب">✆</a>` : ''}</td>
+        <td data-l="تاريخ المناسبة" class="num${clash ? ' dateflag' : ''}"${clash ? ' title="أكثر من حجز حيّ على هذا التاريخ!"' : ''}>${dmy(r.event_date)}</td>
+        <td data-l="النوع">${esc(r.occasion || '—')}</td>
+        <td data-l="المدينة">${esc(r.city || '—')}</td>
+        <td data-l="القاعة">${esc(r.venue || '—')}</td>
+        <td data-l="الحالة">${badge(r.status)}</td>
+        <td data-l="الدفع">${esc(r.payment_status || '—')}</td>
+        <td data-l="المتبقي" class="num">${money(r.remaining)}</td>
+      </tr>`;
+    }).join('');
+    $$('tr[data-id]', tb).forEach((tr) => tr.onclick = () => openDrawer(Number(tr.dataset.id)));
+  }
+  const due = state.rows.reduce((s, r) => s + (r.status !== 'ملغي' && Number(r.remaining) > 0 ? Number(r.remaining) : 0), 0);
+  $('#count').textContent = `${state.rows.length} سجل · متبقٍ ${money(due)}`;
+}
+
+// ---------- pricing manager (tiers by distance; cities inherit the tier price) ----------
+
+let TIERS = [];
+
+async function loadPricing() {
+  const { tiers } = await api('/office/api/pricing');
+  TIERS = tiers;
+  renderPricing();
+}
+
+function tierSelect(cls, selected) {
+  return `<select class="${cls}">${TIERS.map((t) =>
+    `<option value="${t.id}" ${t.id === selected ? 'selected' : ''}>${esc(t.name)} — ${money(t.price)}</option>`).join('')}</select>`;
+}
+
+function renderPricing() {
+  const box = $('#pricing');
+  const nCities = TIERS.reduce((n, t) => n + t.cities.length, 0);
+  box.innerHTML = `
+    <div class="tablebox"><table>
+      <thead><tr><th>الفئة (حسب المسافة/المنطقة)</th><th>السعر</th><th>عدد المدن</th><th></th></tr></thead>
+      <tbody>${TIERS.map((t) => `<tr data-tier="${t.id}">
+        <td><input class="name" value="${esc(t.name)}"></td>
+        <td><input class="price" type="number" step="any" value="${t.price}"></td>
+        <td class="num">${t.cities.length}</td>
+        <td style="display:flex;gap:.4rem">
+          <button class="btn btn--sm saveTier">حفظ</button>
+          ${t.cities.length ? '' : '<button class="btn btn--sm btn--danger delTier">حذف</button>'}
+        </td></tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="addrow">
+      <input class="name" id="ntName" placeholder="اسم فئة جديدة (مثال: المنطقة البعيدة)">
+      <input class="price" id="ntPrice" type="number" step="any" placeholder="السعر">
+      <button class="btn btn--sm" id="addTier">+ إضافة فئة</button>
+    </div></div>
+
+    <div class="tablebox"><table>
+      <thead><tr><th>المدينة</th><th>الفئة — غيّرها لنقل المدينة</th><th>السعر</th><th></th></tr></thead>
+      <tbody>${TIERS.flatMap((t) => t.cities.map((c) => `<tr data-city="${c.id}">
+        <td>${esc(c.name)}</td>
+        <td>${tierSelect('moveCity', t.id)}</td>
+        <td class="num">${money(t.price)}</td>
+        <td><button class="btn btn--sm btn--danger delCity" data-name="${esc(c.name)}">✕</button></td>
+      </tr>`)).join('')}
+      </tbody>
+    </table>
+    <div class="addrow">
+      <input class="name" id="ncName" placeholder="مدينة جديدة…">
+      ${TIERS.length ? tierSelect('ncTier', TIERS[0].id) : ''}
+      <button class="btn btn--sm" id="addCity">+ إضافة مدينة</button>
+    </div></div>`;
+
+  $('#count').textContent = `${TIERS.length} فئات · ${nCities} مدينة`;
+
+  const apply = (r, msg) => { TIERS = r.tiers; renderPricing(); loadMeta().catch(() => {}); toast(msg); };
+  const send = (method, body, okMsg, errMsg) =>
+    api('/office/api/pricing', { method, body: JSON.stringify(body) })
+      .then((r) => apply(r, okMsg))
+      .catch((e) => { if (e.message !== 'unauthorized') toast(errMsg, true); });
+
+  $$('tr[data-tier]', box).forEach((tr) => {
+    const id = Number(tr.dataset.tier);
+    $('.saveTier', tr).onclick = () =>
+      send('PATCH', { type: 'tier', id, name: $('.name', tr).value, price: $('.price', tr).value }, 'تم الحفظ ✓', 'لم يُحفظ — تحقق من القيم');
+    const del = $('.delTier', tr);
+    if (del) del.onclick = () => confirm('حذف هذه الفئة؟') &&
+      send('DELETE', { type: 'tier', id }, 'حُذفت ✓', 'لم تُحذف');
+  });
+  $('#addTier').onclick = () =>
+    send('POST', { type: 'tier', name: $('#ntName').value, price: $('#ntPrice').value }, 'أُضيفت الفئة ✓', 'تحقق من الاسم والسعر');
+  $$('tr[data-city]', box).forEach((tr) => {
+    const id = Number(tr.dataset.city);
+    $('.moveCity', tr).onchange = (e) =>
+      send('PATCH', { type: 'city', id, tier_id: Number(e.target.value) }, 'نُقلت المدينة ✓', 'لم تُنقل');
+    $('.delCity', tr).onclick = (e) => confirm(`حذف "${e.target.dataset.name}" من القائمة؟`) &&
+      send('DELETE', { type: 'city', id }, 'حُذفت ✓', 'لم تُحذف');
+  });
+  $('#addCity').onclick = () => {
+    const sel = $('.ncTier', box);
+    send('POST', { type: 'city', name: $('#ncName').value, tier_id: sel ? Number(sel.value) : 0 }, 'أُضيفت المدينة ✓', 'المدينة موجودة أو الاسم فارغ');
+  };
+}
+
+const GRID_HEAD = $('#grid thead').innerHTML;
+
+// ---------- finance (الأرباح والمصاريف + مصاريف عامة) & inventory (المخزون) ----------
+
+const EVF = [['booking_no','رقم الحجز'],['event_date','تاريخ المناسبة','date'],['city','المدينة'],['client','العميل'],
+  ['price','السعر الكامل','number'],['paid','المدفوع','number'],['worker1','عامل 1','number'],['worker2','عامل 2','number'],
+  ['hours_cost','ساعات','number'],['transport','مواصلات','number'],['printing','طباعة صور','number'],['other','أخرى','number'],
+  ['tax_pct','نسبة الضريبة %','number'],['tax_value','قيمة الضريبة','number']];
+const GENF = [['date','التاريخ','date'],['category','الفئة','list:expense_category'],['description','الوصف'],
+  ['amount','المبلغ','number'],['method','طريقة الدفع'],['notes','ملاحظات']];
+const INVF = [['item','الصنف'],['unit','الوحدة'],['qty_initial','الكمية الأولية','number'],
+  ['qty_added','المُضاف','number'],['qty_used','المُستخدم','number'],['alert_at','حد التنبيه','number']];
+
+function egrid(def, obj) {
+  return '<div class="editgrid">' + def.map(([k, l, kind]) => {
+    const v = obj && obj[k] != null ? obj[k] : '';
+    let input;
+    if (kind === 'date') input = `<input data-k="${k}" type="date" value="${esc(v)}">`;
+    else if (kind === 'number') input = `<input data-k="${k}" type="number" step="any" value="${esc(v)}">`;
+    else if (kind && kind.startsWith('list:')) {
+      const name = kind.slice(5);
+      const opts = (state.meta && state.meta.options[name]) || [];
+      input = `<input data-k="${k}" list="dle_${name}" value="${esc(v)}"><datalist id="dle_${name}">${opts.map((o) => `<option value="${esc(o)}">`).join('')}</datalist>`;
+    } else input = `<input data-k="${k}" value="${esc(v)}">`;
+    return `<div class="field"><label>${l}</label>${input}</div>`;
+  }).join('') + `<div class="acts">
+      <button class="btn btn--sm esave">${obj ? 'حفظ' : 'إضافة'}</button>
+      ${obj ? '<button class="btn btn--sm btn--danger edel">حذف</button>' : ''}
+      <button class="btn btn--ghost btn--sm ecancel">إلغاء</button>
+    </div></div>`;
+}
+const collectGrid = (el) => { const o = {}; $$('input[data-k]', el).forEach((i) => o[i.dataset.k] = i.value); return o; };
+
+// Expandable rows: click a row → inline editor; the add button prepends an empty one.
+function wireEditors(tablebox, def, send) {
+  const closeEditors = () => $$('tr.fedit', tablebox).forEach((e) => e.remove());
+  $$('tr.frow', tablebox).forEach((tr) => tr.onclick = () => {
+    const wasOpen = tr.nextElementSibling && tr.nextElementSibling.classList.contains('fedit');
+    closeEditors();
+    if (wasOpen) return;
+    const obj = JSON.parse(tr.dataset.obj);
+    const ed = document.createElement('tr');
+    ed.className = 'fedit';
+    ed.innerHTML = `<td colspan="${tr.children.length}">${egrid(def, obj)}</td>`;
+    tr.after(ed);
+    $('.esave', ed).onclick = () => send('PATCH', { id: obj.id, ...collectGrid(ed) });
+    $('.edel', ed).onclick = () => confirm('حذف هذا السطر نهائياً؟') && send('DELETE', { id: obj.id });
+    $('.ecancel', ed).onclick = closeEditors;
+  });
+  const add = $('.fadd', tablebox);
+  if (add) add.onclick = () => {
+    closeEditors();
+    const tbody = tablebox.querySelector('tbody');
+    const colspan = tablebox.querySelectorAll('thead th').length;
+    const ed = document.createElement('tr');
+    ed.className = 'fedit';
+    ed.innerHTML = `<td colspan="${colspan}">${egrid(def, null)}</td>`;
+    tbody.prepend(ed);
+    $('.esave', ed).onclick = () => send('POST', collectGrid(ed));
+    $('.ecancel', ed).onclick = closeEditors;
+  };
+}
+
+let FIN = null;
+async function loadFinance() { FIN = await api('/office/api/finance'); renderFinance(); }
+function renderFinance() {
+  const k = FIN.kpi;
+  const net = (k.revenue || 0) - (k.ev_expenses || 0) - (k.gen_expenses || 0);
+  const box = $('#finance');
+  box.innerHTML = `
+    <section class="kpis" style="padding:0">
+      <div class="kpi gold"><b>${money(k.revenue)}</b><span>إيرادات مؤكدة (أسعار الحجوزات)</span></div>
+      <div class="kpi"><b>${money(k.collected)}</b><span>عرابين محصّلة</span></div>
+      <div class="kpi"><b>${money((k.ev_expenses || 0) + (k.gen_expenses || 0))}</b><span>إجمالي المصاريف</span></div>
+      <div class="kpi"><b class="${net >= 0 ? 'pos' : 'neg'}">${money(net)}</b><span>صافي تقريبي</span></div>
+    </section>
+    <div class="tablebox" id="finev"><table>
+      <thead><tr><th>الرقم</th><th>العميل</th><th>المدينة</th><th>التاريخ</th><th>السعر</th><th>المدفوع</th><th>المصاريف</th><th>الصافي</th></tr></thead>
+      <tbody>${FIN.events.map((e) => `<tr class="frow" data-obj='${esc(JSON.stringify(e))}'>
+        <td class="num muted">${esc(e.booking_no || '—')}</td>
+        <td><b>${esc(e.client || '—')}</b></td>
+        <td>${esc(e.city || '—')}</td>
+        <td class="num">${dmy(e.event_date)}</td>
+        <td class="num">${money(e.price)}</td>
+        <td class="num">${money(e.paid)}</td>
+        <td class="num">${money(e.total_expenses)}</td>
+        <td class="num ${(e.net_profit ?? 0) >= 0 ? 'pos' : 'neg'}">${money(e.net_profit)}</td>
+      </tr>`).join('') || '<tr><td colspan="8"><div class="empty">لا سطور بعد</div></td></tr>'}</tbody>
+    </table>
+    <div class="addrow"><span class="muted" style="font-size:.8rem">أرباح ومصاريف المناسبات — اضغط على سطر للتعديل، والمصاريف والصافي يُحسبان تلقائياً</span><button class="btn btn--sm fadd">+ إضافة مناسبة</button></div></div>
+
+    <div class="tablebox" id="fingen"><table>
+      <thead><tr><th>التاريخ</th><th>الفئة</th><th>الوصف</th><th>المبلغ</th><th>طريقة الدفع</th><th>ملاحظات</th></tr></thead>
+      <tbody>${FIN.general.map((g) => `<tr class="frow" data-obj='${esc(JSON.stringify(g))}'>
+        <td class="num">${dmy(g.date)}</td>
+        <td>${esc(g.category || '—')}</td>
+        <td>${esc(g.description || '—')}</td>
+        <td class="num">${money(g.amount)}</td>
+        <td>${esc(g.method || '—')}</td>
+        <td>${esc(g.notes || '—')}</td>
+      </tr>`).join('') || '<tr><td colspan="6"><div class="empty">لا مصاريف عامة بعد</div></td></tr>'}</tbody>
+    </table>
+    <div class="addrow"><span class="muted" style="font-size:.8rem">المصاريف العامة</span><button class="btn btn--sm fadd">+ إضافة مصروف</button></div></div>`;
+
+  const send = (table) => (method, body) =>
+    api('/office/api/finance', { method, body: JSON.stringify({ table, ...body }) })
+      .then((r) => { FIN = r; renderFinance(); toast('تم ✓'); })
+      .catch((e) => { if (e.message !== 'unauthorized') toast('لم يُحفظ — تحقق من القيم', true); });
+  wireEditors($('#finev', box), EVF, send('event'));
+  wireEditors($('#fingen', box), GENF, send('general'));
+}
+
+let INV = null;
+async function loadInventory() { INV = await api('/office/api/inventory'); renderInventory(); }
+function renderInventory() {
+  const box = $('#inventory');
+  box.innerHTML = `<div class="tablebox" id="invbox"><table>
+    <thead><tr><th>الصنف</th><th>الوحدة</th><th>أولية</th><th>مُضاف</th><th>مُستخدم</th><th>المتبقي</th><th>حد التنبيه</th><th>الحالة</th></tr></thead>
+    <tbody>${INV.items.map((i) => `<tr class="frow" data-obj='${esc(JSON.stringify(i))}'>
+      <td><b>${esc(i.item)}</b></td>
+      <td>${esc(i.unit || '—')}</td>
+      <td class="num">${i.qty_initial ?? '—'}</td>
+      <td class="num">${i.qty_added ?? '—'}</td>
+      <td class="num">${i.qty_used ?? '—'}</td>
+      <td class="num"><b>${i.qty_left ?? '—'}</b></td>
+      <td class="num">${i.alert_at ?? '—'}</td>
+      <td class="${i.state === 'منخفض' ? 'neg' : 'pos'}">${esc(i.state || '—')}</td>
+    </tr>`).join('') || '<tr><td colspan="8"><div class="empty">لا أصناف بعد</div></td></tr>'}</tbody>
+  </table>
+  <div class="addrow"><span class="muted" style="font-size:.8rem">المتبقي والحالة يُحسبان تلقائياً — اضغط على سطر للتعديل</span><button class="btn btn--sm fadd">+ إضافة صنف</button></div></div>`;
+  const send = (method, body) =>
+    api('/office/api/inventory', { method, body: JSON.stringify(body) })
+      .then((r) => { INV = r; renderInventory(); toast('تم ✓'); })
+      .catch((e) => { if (e.message !== 'unauthorized') toast('لم يُحفظ', true); });
+  wireEditors($('#invbox', box), INVF, send);
+}
+
+// ---------- visitors (analytics) & Meta CAPI ----------
+
+function bars(title, rows) {
+  const max = Math.max(1, ...rows.map((r) => r.n));
+  return `<div class="tablebox statbox"><b>${title}</b>
+    ${rows.map((r) => `<div class="bar"><span>${esc(String(r.k))}</span><i style="width:${(r.n / max * 100).toFixed(0)}%"></i><b>${r.n}</b></div>`).join('')
+      || '<div class="empty">لا بيانات بعد</div>'}</div>`;
+}
+
+let STATS = null;
+async function loadVisitors(days) {
+  STATS = await api('/office/api/stats?days=' + (days || 30));
+  renderVisitors();
+}
+function renderVisitors() {
+  const s = STATS;
+  const k = s.kpi;
+  const langName = { ar: 'عربي', he: 'عبري', en: 'إنجليزي' };
+  const devName = { mobile: 'موبايل', desktop: 'حاسوب' };
+  const box = $('#visitors');
+  box.innerHTML = `
+    <div class="addrow" style="padding:0">
+      <select id="statDays">${[7, 30, 90].map((d) => `<option value="${d}" ${s.days === d ? 'selected' : ''}>آخر ${d} يوم</option>`).join('')}</select>
+      <span class="muted" style="font-size:.78rem">إحصاءات مجهولة الهوية — بدون كوكيز، بدون IP، مع احترام Do Not Track</span>
+    </div>
+    <section class="kpis" style="padding:0">
+      <div class="kpi gold"><b>${k.visits}</b><span>زيارات</span></div>
+      <div class="kpi"><b>${k.views}</b><span>مشاهدات صفحة</span></div>
+      <div class="kpi"><b>${k.wa}</b><span>نقرات واتساب</span></div>
+      <div class="kpi"><b>${k.submits}</b><span>طلبات من النموذج</span></div>
+      <div class="kpi"><b>${k.avg_time || 0} ث</b><span>متوسط مدة الزيارة</span></div>
+      <div class="kpi gold"><b>${s.meta_leads}</b><span>عملاء من إعلانات ميتا</span></div>
+    </section>
+    ${bars('الزيارات باليوم', s.series.map((r) => ({ k: r.d.slice(5), n: r.n })))}
+    ${bars('مصادر الزيارات', s.sources)}
+    ${bars('الدول', s.countries)}
+    ${bars('عمق التمرير — وصلوا حتى', s.funnel.map((r) => ({ k: r.k + '%', n: r.n })))}
+    ${bars('اللغة', s.langs.map((r) => ({ k: langName[r.k] || r.k, n: r.n })))}
+    ${bars('الجهاز', s.devices.map((r) => ({ k: devName[r.k] || r.k, n: r.n })))}`;
+  $('#statDays').onchange = (e) => loadVisitors(Number(e.target.value)).catch(() => {});
+}
+
+const intlPhone = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.startsWith('0') ? '972' + d.slice(1) : d; };
+const fromMeta = (r) => {
+  if (r.lead_source === 'إعلان ممول (Meta)') return true;
+  try { return JSON.parse(r.extra || '{}').attribution?.fbclid === 1 } catch { return false }
+};
+
+let CAPI = [];
+let CAPI_ALL = 0;
+async function loadCapi() {
+  const { rows } = await api('/office/api/bookings?status=' + encodeURIComponent('مؤكد,دفع العربون,مكتمل') + '&order=date&limit=1000');
+  CAPI_ALL = rows.length;
+  // The workbook's rule: only Meta-sourced customers who actually BOOKED enter CAPI.
+  // Setting مصدر العميل = إعلان ممول (Meta) on a booking adds it here automatically.
+  CAPI = rows.filter(fromMeta);
+  renderCapi();
+}
+function renderCapi() {
+  const box = $('#capi');
+  const total = CAPI.reduce((s, r) => s + (Number(r.price) || 0), 0);
+  box.innerHTML = `
+    <section class="kpis" style="padding:0">
+      <div class="kpi gold"><b>${CAPI.length}</b><span>حجوزات من إعلانات ميتا (مؤكد / عربون / مكتمل)</span></div>
+      <div class="kpi"><b>${money(total)}</b><span>قيمة حجوزات ميتا</span></div>
+      <div class="kpi"><b>${CAPI_ALL}</b><span>إجمالي الحجوزات الفعلية (كل المصادر)</span></div>
+    </section>
+    <div class="addrow" style="padding:0">
+      <button class="btn btn--sm" id="capiCsv">تنزيل CSV بصيغة ميتا ⬇</button>
+      <span class="muted" style="font-size:.78rem">حدّد «مصدر العميل = إعلان ممول (Meta)» على الحجز ليُضاف هنا تلقائياً — يُرفع في Events Manager → Offline events</span>
+    </div>
+    <div class="tablebox"><table>
+      <thead><tr><th>order_id</th><th>الاسم</th><th>التاريخ</th><th>القيمة</th><th>الهاتف (دولي)</th><th>المدينة</th></tr></thead>
+      <tbody>${CAPI.map((r) => `<tr>
+        <td class="num muted">${esc(r.booking_no || '#' + r.id)}</td>
+        <td><b>${esc(r.name || '—')}</b></td>
+        <td class="num">${dmy(r.event_date)}</td>
+        <td class="num">${money(r.price)}</td>
+        <td class="num">${intlPhone(r.phone) || '—'}</td>
+        <td>${esc(r.city || '—')}</td>
+      </tr>`).join('') || '<tr><td colspan="6"><div class="empty">لا حجوزات من ميتا بعد — حدّد مصدر العميل على الحجوزات</div></td></tr>'}</tbody>
+    </table></div>`;
+  $('#capiCsv').onclick = () => {
+    const head = ['order_id','event_name','event_time','value','currency','email','phone','fn','ln','ct','st','country','action_source','data_processing_options'];
+    const lines = CAPI.map((r) => [
+      r.booking_no || '#' + r.id,
+      'Purchase',
+      (r.event_date || new Date().toISOString().slice(0, 10)) + 'T12:00:00',
+      r.price ?? '', 'ILS', r.email || '', intlPhone(r.phone),
+      r.first_name || (r.name || '').split(' ')[0] || '',
+      r.last_name || (r.name || '').split(' ').slice(1).join(' ') || '',
+      r.city || '', r.region || '', 'IL', 'physical_store', 'non-ldu',
+    ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','));
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff' + [head.join(',')].concat(lines).join('\n')], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'sarab-meta-capi.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+}
+
+// ---------- data ----------
+
+async function loadMeta() {
+  state.meta = await api('/office/api/meta');
+  $('#who').textContent = state.meta.email || '';
+  renderKpis(); renderChips(); renderMonths();
+}
+
+async function loadRows() {
+  const f = state.filters;
+  const p = new URLSearchParams();
+  if (state.tab === 'callback') p.set('callback', '1');
+  if (f.q) p.set('q', f.q);
+  if (f.statusIn.length) p.set('status', f.statusIn.join(','));
+  if (f.statusEx.length) p.set('xstatus', f.statusEx.join(','));
+  if (f.month) p.set('month', f.month);
+  if (f.upcoming) p.set('upcoming', '1');
+  if (f.nopast) p.set('nopast', '1');
+  p.set('order', f.order);
+  const data = await api('/office/api/bookings?' + p);
+  state.rows = data.rows;
+  state.conflicts = new Set(data.conflict_dates || []);
+  $('#grid thead').innerHTML = GRID_HEAD;
+  renderRows();
+}
+
+// ---------- drawer ----------
+
+const F = [
+  ['booking_no', 'رقم الحجز', 'ro'],
+  ['status', 'الحالة', 'select:status'],
+  ['first_name', 'الاسم الأول'], ['last_name', 'اسم العائلة'],
+  ['phone', 'الهاتف / واتساب'], ['city', 'المدينة', 'list:cities'],
+  ['occasion', 'نوع المناسبة', 'list:occasion'], ['venue', 'القاعة / المكان', 'list:venues'],
+  ['event_date', 'تاريخ المناسبة', 'date'], ['booked_at', 'تاريخ الحجز', 'date'],
+  ['start_time', 'وقت البداية'], ['end_time', 'وقت النهاية'],
+  ['hours', 'عدد الساعات', 'number'], ['guests', 'عدد الضيوف'],
+  ['price', 'السعر الكامل', 'number'], ['deposit', 'العربون المدفوع', 'number'],
+  ['remaining', 'المتبقي', 'number'], ['payment_status', 'حالة الدفع', 'select:payment_status'],
+  ['lead_source', 'مصدر العميل', 'select:lead_source'], ['interest', 'مستوى الاهتمام', 'select:interest'],
+  ['region', 'المنطقة'], ['arrival_time', 'وقت وصولي'],
+  ['package', 'الباقة / النمط'], ['email', 'البريد الإلكتروني'],
+  ['callback', 'إعادة الاتصال؟', 'check'],
+  ['notes', 'ملاحظات', 'textarea'],
+];
+
+function fieldHtml([key, label, kind]) {
+  const full = kind === 'textarea' ? ' full' : '';
+  let input;
+  if (kind === 'ro') input = `<input id="f_${key}" readonly style="opacity:.65">`;
+  else if (kind === 'date') input = `<input id="f_${key}" type="date">`;
+  else if (kind === 'number') input = `<input id="f_${key}" type="number" step="any" inputmode="decimal">`;
+  else if (kind === 'check') input = `<input id="f_${key}" type="checkbox" style="width:auto;height:1.2rem">`;
+  else if (kind === 'textarea') input = `<textarea id="f_${key}" rows="3"></textarea>`;
+  else if (kind && kind.startsWith('select:')) {
+    const opts = state.meta.options[kind.slice(7)] || [];
+    input = `<select id="f_${key}"><option value=""></option>${opts.map((o) => `<option>${esc(o)}</option>`).join('')}</select>`;
+  } else if (kind && kind.startsWith('list:')) {
+    const name = kind.slice(5);
+    const opts = name === 'cities' ? (state.meta.cities || []).map((c) => c.name)
+      : name === 'venues' ? (state.meta.venues || [])
+      : (state.meta.options[name] || []);
+    input = `<input id="f_${key}" list="dl_${name}"><datalist id="dl_${name}">${opts.map((o) => `<option value="${esc(o)}">`).join('')}</datalist>`;
+  } else input = `<input id="f_${key}">`;
+  return `<div class="field${full}"><label for="f_${key}">${label}</label>${input}</div>`;
+}
+
+// Draft replies in the lead's language (⚠ draft copy — flagged for the owner's sign-off).
+const REPLY = {
+  ar: (o) => `مرحباً${o.n ? ' ' + o.n : ''} 🌟 شكراً لتواصلكم مع سراب!`
+    + (o.free ? `\nالتاريخ ${o.d} متاح ✓` : '')
+    + (o.p ? `\nسعر الخدمة في ${o.c}: ${o.p} ₪` : '')
+    + `\nيسعدنا نأكدلكم الحجز — أي سؤال إحنا جاهزين! 📸`,
+  he: (o) => `שלום${o.n ? ' ' + o.n : ''} 🌟 תודה שפניתם ל-SARAB!`
+    + (o.free ? `\nהתאריך ${o.d} פנוי ✓` : '')
+    + (o.p ? `\nהמחיר ל${o.c}: ${o.p} ₪` : '')
+    + `\nנשמח לסגור לכם את התאריך — לכל שאלה אנחנו כאן! 📸`,
+  en: (o) => `Hi${o.n ? ' ' + o.n : ''} 🌟 Thanks for reaching out to SARAB!`
+    + (o.free ? `\n${o.d} is available ✓` : '')
+    + (o.p ? `\nThe price for ${o.c}: ₪${o.p}` : '')
+    + `\nWe'd love to lock in your date — any questions, we're here! 📸`,
+};
+
+async function loadIntel() {
+  const box = $('#intel');
+  if (!box) return;
+  const date = $('#f_event_date').value;
+  const cityTxt = $('#f_city').value || $('#f_venue').value;
+  if (!date && !cityTxt) { box.style.display = 'none'; return; }
+  let conflicts = [], match = null;
+  try {
+    const p = new URLSearchParams({ date, city: cityTxt });
+    if (state.editing) p.set('exclude', state.editing);
+    ({ conflicts, match } = await api('/office/api/intel?' + p));
+  } catch { return; }
+
+  const free = !!date && !conflicts.length;
+  const dateLine = !date ? '' : free
+    ? `<div class="ok">✓ التاريخ ${dmy(date)} متاح</div>`
+    : `<div class="busy">⚠ على هذا التاريخ: ${conflicts.map((c) =>
+        `${esc(c.booking_no || '#' + c.id)} ${esc(c.name || '')} (${esc(c.status)})${c.start_time ? ' · ' + esc(c.start_time) : ''}`).join(' — ')}</div>`;
+  const priceLine = match
+    ? `<div>💰 سعر <b>${esc(match.name)}</b>: <b>${money(match.price)}</b> <span class="muted">(${esc(match.tier)})</span></div>`
+    : (cityTxt ? '<div class="muted">المدينة غير موجودة في قائمة الأسعار — حدّد السعر يدوياً</div>' : '');
+  const wa = waLink($('#f_phone').value);
+  const canReply = wa && (free || match);
+  box.innerHTML = `${dateLine}${priceLine}<div class="actions">
+    ${match ? `<button type="button" class="btn btn--sm" id="usePrice">اعتماد السعر ${money(match.price)}</button>` : ''}
+    ${canReply ? `<button type="button" class="btn btn--sm btn--ghost" id="waReply">رد جاهز عبر واتساب</button>` : ''}
+  </div>`;
+  box.style.display = '';
+
+  if (match) $('#usePrice').onclick = () => {
+    $('#f_price').value = match.price;
+    if (!state.remainTouched) {
+      const d = parseFloat($('#f_deposit').value) || 0;
+      $('#f_remaining').value = match.price - d;
+    }
+    toast('تم اعتماد السعر — لا تنسَ الحفظ');
+  };
+  if (canReply) $('#waReply').onclick = () => {
+    const row = state.editing ? state.rows.find((r) => r.id === state.editing) : null;
+    const lang = (row && row.lang) || 'ar';
+    const first = $('#f_first_name').value || ((row && row.name) || '').split(' ')[0] || '';
+    const text = (REPLY[lang] || REPLY.ar)({
+      n: first, d: dmy(date), free,
+      c: match ? match.name : cityTxt, p: match ? match.price : null,
+    });
+    window.open(wa + '?text=' + encodeURIComponent(text), '_blank', 'noopener');
+  };
+}
+
+function openDrawer(id) {
+  const row = id ? state.rows.find((r) => r.id === id) : null;
+  state.editing = row ? row.id : null;
+  state.remainTouched = !!row;
+  $('#dTitle').textContent = row ? `${row.booking_no || '#' + row.id} — ${row.name || ''}` : 'حجز جديد';
+  $('#dBody').innerHTML = '<div class="field full intel" id="intel" style="display:none"></div>' + F.map(fieldHtml).join('');
+  for (const [key,, kind] of F) {
+    const el = $('#f_' + key);
+    const v = row ? row[key] : (key === 'status' ? 'استفسار' : null);
+    if (kind === 'check') { el.checked = v === 1 || v === true; continue; }
+    // A stored value missing from the options list must never be silently blanked
+    // (saving would erase it) — surface it as a real option instead.
+    if (el.tagName === 'SELECT' && v && ![...el.options].some((o) => o.value === String(v))) {
+      const o = document.createElement('option');
+      o.value = o.textContent = String(v);
+      el.appendChild(o);
+    }
+    el.value = v ?? '';
+  }
+  // auto-suggest remaining = price − deposit until the owner edits remaining manually
+  $('#f_remaining').addEventListener('input', () => state.remainTouched = true);
+  for (const k of ['price', 'deposit']) $('#f_' + k).addEventListener('input', () => {
+    if (state.remainTouched) return;
+    const p = parseFloat($('#f_price').value), d = parseFloat($('#f_deposit').value) || 0;
+    if (Number.isFinite(p)) $('#f_remaining').value = p - d;
+  });
+  // live intel: availability for the chosen date + tier price for the city
+  const intelDeb = (() => { let h; return () => { clearTimeout(h); h = setTimeout(loadIntel, 400); }; })();
+  $('#f_event_date').addEventListener('change', loadIntel);
+  $('#f_city').addEventListener('input', intelDeb);
+  $('#f_venue').addEventListener('input', intelDeb);
+  loadIntel();
+  const wa = row && waLink(row.phone);
+  $('#waBtn').style.display = wa ? '' : 'none';
+  if (wa) $('#waBtn').href = wa;
+  const del = $('#delBtn');
+  del.style.display = row ? '' : 'none';
+  del.onclick = !row ? null : () => {
+    if (!confirm(`حذف ${row.booking_no || '#' + row.id} — ${row.name || ''} نهائياً؟ لا يمكن التراجع.`)) return;
+    api('/office/api/bookings/' + row.id, { method: 'DELETE' })
+      .then(() => { closeDrawer(); toast('حُذف ✓'); return Promise.all([loadMeta(), loadRows()]); })
+      .catch((e) => { if (e.message !== 'unauthorized') toast('لم يُحذف', true); });
+  };
+  $('#dMeta').textContent = row ? `المصدر: ${row.source || '—'} · أُضيف: ${dmy(row.created_at)}${row.lang ? ' · لغة الموقع: ' + row.lang : ''}` : '';
+  $('#drawer').classList.add('open'); $('#scrim').classList.add('open');
+}
+
+function closeDrawer() { $('#drawer').classList.remove('open'); $('#scrim').classList.remove('open'); }
+
+async function save() {
+  const body = {};
+  for (const [key,, kind] of F) {
+    if (kind === 'ro') continue;
+    const el = $('#f_' + key);
+    body[key] = kind === 'check' ? (el.checked ? 1 : 0) : el.value;
+  }
+  try {
+    if (state.editing) {
+      await api('/office/api/bookings/' + state.editing, { method: 'PATCH', body: JSON.stringify(body) });
+      toast('تم الحفظ ✓');
+    } else {
+      const { row } = await api('/office/api/bookings', { method: 'POST', body: JSON.stringify(body) });
+      toast(`أُنشئ ${row.booking_no} ✓`);
+    }
+    closeDrawer();
+    await Promise.all([loadMeta(), loadRows()]);
+  } catch (e) {
+    if (e.message !== 'unauthorized') toast('لم يتم الحفظ — حاول مجدداً', true);
+  }
+}
+
+// ---------- wiring ----------
+
+$('#saveBtn').onclick = save;
+$('#closeBtn').onclick = closeDrawer;
+$('#scrim').onclick = closeDrawer;
+$('#newBtn').onclick = () => openDrawer(null);
+$('#refreshBtn').onclick = () => Promise.all([loadMeta(), loadRows()]).then(() => toast('تم التحديث ✓'));
+$('#csvBtn').onclick = () => {
+  const cols = ['booking_no','name','first_name','last_name','phone','event_date','occasion','city','region','venue',
+    'status','payment_status','price','deposit','remaining','lead_source','interest','callback','notes','source','lang','created_at'];
+  const csv = [cols.join(',')]
+    .concat(state.rows.map((r) => cols.map((c) => `"${String(r[c] ?? '').replace(/"/g, '""')}"`).join(',')))
+    .join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'sarab-bookings.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+let qTimer;
+$('#q').addEventListener('input', (e) => {
+  clearTimeout(qTimer);
+  qTimer = setTimeout(() => { state.filters.q = e.target.value.trim(); loadRows(); }, 300);
+});
+$('#month').onchange = (e) => { state.filters.month = e.target.value; loadRows(); };
+$('#upcoming').onchange = (e) => { state.filters.upcoming = e.target.checked; loadRows(); };
+$('#nopast').onchange = (e) => { state.filters.nopast = e.target.checked; loadRows(); };
+$('#order').onchange = (e) => { state.filters.order = e.target.value; loadRows(); };
+
+const PANES = { bookings: '#gridbox', callback: '#gridbox', cities: '#pricing', finance: '#finance', inventory: '#inventory', visitors: '#visitors', capi: '#capi' };
+$$('#tabs button').forEach((b) => b.onclick = () => {
+  $$('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
+  state.tab = b.dataset.tab;
+  const pane = PANES[state.tab];
+  $('#filters').style.display = pane === '#gridbox' ? '' : 'none';
+  for (const sel of ['#gridbox', '#pricing', '#finance', '#inventory', '#visitors', '#capi']) $(sel).style.display = sel === pane ? '' : 'none';
+  if (state.tab === 'cities') loadPricing().catch(() => {});
+  else if (state.tab === 'finance') loadFinance().catch(() => {});
+  else if (state.tab === 'inventory') loadInventory().catch(() => {});
+  else if (state.tab === 'visitors') loadVisitors().catch(() => {});
+  else if (state.tab === 'capi') loadCapi().catch(() => {});
+  else loadRows();
+});
+
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+
+(async function init() {
+  try {
+    await loadMeta();
+    await loadRows();
+  } catch (e) { /* veil already shown on 403 */ }
+})();
+</script>
+</body>
+</html>
