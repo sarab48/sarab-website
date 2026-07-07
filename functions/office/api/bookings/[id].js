@@ -4,7 +4,7 @@
   normally stay as the ملغي status).
   Auth: ../../_middleware.js.
 */
-import { cleanValue } from '../bookings.js'
+import { cleanValue, ensureEventFinance } from '../bookings.js'
 
 const WRITABLE = [
   'booked_at', 'event_date', 'occasion', 'first_name', 'last_name', 'name', 'phone',
@@ -39,6 +39,8 @@ export async function onRequestPatch({ request, env, params }) {
   if (!meta.changes) return Response.json({ ok: false, error: 'not-found' }, { status: 404 })
 
   const row = await env.DB.prepare('SELECT * FROM bookings WHERE id = ?1').bind(Number(params.id)).first()
+  // Newly completed booking → auto-seed its row in أرباح ومصاريف المناسبات (idempotent).
+  await ensureEventFinance(env, row)
   return Response.json({ ok: true, row })
 }
 

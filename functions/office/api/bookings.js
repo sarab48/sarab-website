@@ -23,6 +23,33 @@ export function cleanValue(key, v) {
   return String(v).trim().slice(0, 500) || null
 }
 
+// When a booking becomes مكتمل, make sure it has a row in the per-event P&L table
+// (أرباح ومصاريف المناسبات) seeded from the booking — so the owner only fills in the
+// costs. Idempotent: keyed on booking_no, so re-saving a completed booking (or one that
+// was already given a finance row / imported) never creates a duplicate.
+export async function ensureEventFinance(env, row) {
+  if (!row || row.status !== 'مكتمل' || !row.booking_no) return
+  const existing = await env.DB.prepare('SELECT id FROM event_finances WHERE booking_no = ?1')
+    .bind(row.booking_no).first()
+  if (existing) return
+  const price = Number(row.price)
+  const priceVal = Number.isFinite(price) ? price : null
+  const remaining = Number(row.remaining)   // unrecorded → 0 (nothing left outstanding)
+  const deposit = Number(row.deposit)
+  // Collected so far: for a completed event, the price minus any balance still outstanding
+  // (so a fully-paid event seeds paid = price); if the price itself isn't recorded, fall
+  // back to the deposit we do know about.
+  const paid = priceVal != null
+    ? priceVal - (Number.isFinite(remaining) ? remaining : 0)
+    : Number.isFinite(deposit) ? deposit : null
+  await env.DB.prepare(
+    `INSERT INTO event_finances
+       (booking_no, event_date, city, client, price, paid, total_expenses, net_profit)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7)`
+  ).bind(row.booking_no, row.event_date || null, row.city || null, row.name || null,
+    priceVal, paid, priceVal ?? 0).run()
+}
+
 export async function onRequestGet({ request, env }) {
   const u = new URL(request.url)
   const where = []
@@ -97,5 +124,6 @@ export async function onRequestPost({ request, env }) {
                VALUES (${cols.map((_, i) => `?${i + 1}`).join(',')})`
   const { meta } = await env.DB.prepare(sql).bind(...cols.map((c) => row[c])).run()
   const created = await env.DB.prepare('SELECT * FROM bookings WHERE id = ?1').bind(meta.last_row_id).first()
+  await ensureEventFinance(env, created)
   return Response.json({ ok: true, row: created })
 }

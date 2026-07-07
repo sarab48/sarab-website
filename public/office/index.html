@@ -736,7 +736,7 @@ const F = [
   ['status', 'الحالة', 'select:status'],
   ['first_name', 'الاسم الأول'], ['last_name', 'اسم العائلة'],
   ['phone', 'الهاتف / واتساب'], ['city', 'المدينة', 'list:cities'],
-  ['occasion', 'نوع المناسبة', 'list:occasion'], ['venue', 'القاعة / المكان', 'list:venues'],
+  ['occasion', 'نوع المناسبة', 'combo:occasion'], ['venue', 'القاعة / المكان', 'list:venues'],
   ['event_date', 'تاريخ المناسبة', 'date'], ['booked_at', 'تاريخ الحجز', 'date'],
   ['start_time', 'وقت البداية'], ['end_time', 'وقت النهاية'],
   ['hours', 'عدد الساعات', 'number'], ['guests', 'عدد الضيوف'],
@@ -760,6 +760,10 @@ function fieldHtml([key, label, kind]) {
   else if (kind && kind.startsWith('select:')) {
     const opts = state.meta.options[kind.slice(7)] || [];
     input = `<select id="f_${key}"><option value=""></option>${opts.map((o) => `<option>${esc(o)}</option>`).join('')}</select>`;
+  } else if (kind && kind.startsWith('combo:')) {
+    // Real dropdown (full list, never clipped, native mobile picker) + inline "add new".
+    const opts = state.meta.options[kind.slice(6)] || [];
+    input = `<select id="f_${key}"><option value=""></option>${opts.map((o) => `<option>${esc(o)}</option>`).join('')}<option value="__add__">➕ نوع آخر…</option></select>`;
   } else if (kind && kind.startsWith('list:')) {
     const name = kind.slice(5);
     const opts = name === 'cities' ? (state.meta.cities || []).map((c) => c.name)
@@ -853,6 +857,19 @@ function openDrawer(id) {
       el.appendChild(o);
     }
     el.value = v ?? '';
+  }
+  // occasion combo: choosing "➕ نوع آخر…" lets the owner type a brand-new type inline
+  const occ = $('#f_occasion');
+  if (occ && occ.tagName === 'SELECT') {
+    let prev = occ.value;
+    occ.addEventListener('change', () => {
+      if (occ.value !== '__add__') { prev = occ.value; return; }
+      const t = (prompt('اكتب نوع المناسبة الجديد:') || '').trim();
+      if (t) {
+        if (![...occ.options].some((o) => o.value === t)) occ.add(new Option(t, t), occ.options[occ.options.length - 1]);
+        occ.value = t; prev = t;
+      } else { occ.value = prev; }
+    });
   }
   // auto-suggest remaining = price − deposit until the owner edits remaining manually
   $('#f_remaining').addEventListener('input', () => state.remainTouched = true);
