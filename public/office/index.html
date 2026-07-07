@@ -124,6 +124,9 @@
   .pricing select{width:auto}
   .addrow{display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; padding:.7rem}
   .addrow input{width:auto}
+  .finhead{display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:.4rem; padding:.2rem .2rem 0}
+  .finhead b{color:var(--gold); font-size:.95rem}
+  .finhead .muted{font-size:.82rem}
   .btn--sm{padding:.35rem .8rem; font-size:.82rem}
   .btn--danger{background:transparent; color:var(--warn); border:1px solid var(--line)}
   .intel{
@@ -519,6 +522,9 @@ async function loadFinance() { FIN = await api('/office/api/finance'); renderFin
 function renderFinance() {
   const k = FIN.kpi;
   const net = (k.revenue || 0) - (k.ev_expenses || 0) - (k.gen_expenses || 0);
+  const adv = FIN.advances || [];
+  const advIn = adv.reduce((s, r) => s + (Number(r.deposit) || 0), 0);
+  const advDue = adv.reduce((s, r) => s + (Number(r.remaining) || 0), 0);
   const box = $('#finance');
   box.innerHTML = `
     <section class="kpis" style="padding:0">
@@ -527,6 +533,26 @@ function renderFinance() {
       <div class="kpi"><b>${money((k.ev_expenses || 0) + (k.gen_expenses || 0))}</b><span>إجمالي المصاريف</span></div>
       <div class="kpi"><b class="${net >= 0 ? 'pos' : 'neg'}">${money(net)}</b><span>صافي تقريبي</span></div>
     </section>
+
+    <div class="finhead">
+      <b>💰 عرابين محصّلة — حجوزات قادمة</b>
+      <span class="muted">محصّل مقدماً <b class="pos">${money(advIn)}</b> · متبقٍ للتحصيل <b>${money(advDue)}</b></span>
+    </div>
+    <div class="tablebox" id="finadv"><table>
+      <thead><tr><th>الرقم</th><th>العميل</th><th>التاريخ</th><th>المدينة</th><th>السعر الكامل</th><th>العربون المحصّل</th><th>المتبقي للتحصيل</th><th>الحالة</th></tr></thead>
+      <tbody>${adv.map((r) => `<tr>
+        <td class="num muted">${esc(r.booking_no || '—')}</td>
+        <td><b>${esc(r.client || '—')}</b></td>
+        <td class="num">${dmy(r.event_date)}</td>
+        <td>${esc(r.city || '—')}</td>
+        <td class="num">${money(r.price)}</td>
+        <td class="num pos">${money(r.deposit)}</td>
+        <td class="num">${money(r.remaining)}</td>
+        <td>${badge(r.status)}</td>
+      </tr>`).join('') || '<tr><td colspan="8"><div class="empty">لا عرابين محصّلة من حجوزات قادمة بعد</div></td></tr>'}</tbody>
+    </table>
+    <div class="addrow"><span class="muted" style="font-size:.8rem">حجوزات مؤكدة دفعت عربوناً ولم تُنجز بعد — للاطّلاع فقط (تُدار من تبويب الحجوزات)</span></div></div>
+
     <div class="tablebox" id="finev"><table>
       <thead><tr><th>الرقم</th><th>العميل</th><th>المدينة</th><th>التاريخ</th><th>السعر</th><th>المدفوع</th><th>المصاريف</th><th>الصافي</th></tr></thead>
       <tbody>${FIN.events.map((e) => `<tr class="frow" data-obj='${esc(JSON.stringify(e))}'>

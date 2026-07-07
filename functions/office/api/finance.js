@@ -24,7 +24,7 @@ const val = (k, v, nums) => {
 }
 
 async function payload(env) {
-  const [ev, gen, kpi] = await env.DB.batch([
+  const [ev, gen, kpi, adv] = await env.DB.batch([
     env.DB.prepare('SELECT * FROM event_finances ORDER BY (event_date IS NULL), event_date DESC, id DESC'),
     env.DB.prepare('SELECT * FROM general_expenses ORDER BY (date IS NULL), date DESC, id DESC'),
     env.DB.prepare(`SELECT
@@ -32,8 +32,15 @@ async function payload(env) {
       (SELECT COALESCE(SUM(deposit),0) FROM bookings WHERE status IN ('مؤكد','دفع العربون','مكتمل')) AS collected,
       (SELECT COALESCE(SUM(total_expenses),0) FROM event_finances) AS ev_expenses,
       (SELECT COALESCE(SUM(amount),0)  FROM general_expenses) AS gen_expenses`),
+    // Advances (عربون) already collected on confirmed bookings that haven't happened yet —
+    // cash in hand. Listed on its own so the owner sees collected vs. still-to-collect,
+    // separate from the completed-events P&L (which handles done events).
+    env.DB.prepare(`SELECT booking_no, event_date, city, name AS client, price, deposit, remaining, status
+                    FROM bookings
+                    WHERE status IN ('مؤكد','دفع العربون') AND COALESCE(deposit, 0) > 0
+                    ORDER BY (event_date IS NULL), event_date ASC, id ASC`),
   ])
-  return { ok: true, events: ev.results, general: gen.results, kpi: kpi.results[0] }
+  return { ok: true, events: ev.results, general: gen.results, kpi: kpi.results[0], advances: adv.results }
 }
 
 async function recomputeEvent(env, id) {
