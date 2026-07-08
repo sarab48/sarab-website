@@ -68,6 +68,9 @@ export async function onRequestGet({ request, env }) {
   if (xstatuses.length) { where.push(`status NOT IN (${xstatuses.map(() => '?').join(',')})`); params.push(...xstatuses) }
   const month = u.searchParams.get('month')
   if (month) { where.push('substr(event_date, 1, 7) = ?'); params.push(month) }
+  // Exact-day availability check (office "فحص تاريخ"): everything booked on one date.
+  const date = u.searchParams.get('date')
+  if (date) { where.push('event_date = ?'); params.push(date.slice(0, 20)) }
   if (u.searchParams.get('upcoming') === '1') where.push("event_date >= date('now')")
   if (u.searchParams.get('nopast') === '1') where.push("(event_date IS NULL OR event_date >= date('now'))")
   if (u.searchParams.get('callback') === '1') where.push('callback = 1')

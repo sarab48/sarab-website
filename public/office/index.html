@@ -141,6 +141,22 @@
   .dateflag{color:#FF8A7A; font-weight:800}
   .dateflag::before{content:'⚠ '}
 
+  /* quick date-availability check: a filter button that pops the calendar, a verdict
+     banner, and any real booking on that date floated to the top and flagged red */
+  .dc-wrap{position:relative; display:inline-flex}
+  .dc-wrap #dateCheckInput{position:absolute; inset:0; width:100%; height:100%; opacity:0; pointer-events:none; padding:0; margin:0; border:0; min-width:0}
+  .dc-chip{cursor:pointer; background:var(--gold); color:#231A0E; border-color:var(--gold); font-weight:700}
+  .verdict{border-radius:var(--r); padding:.7rem 1rem; margin:0 0 .9rem; font-weight:700; display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; font-size:.95rem}
+  .verdict small{font-weight:500; opacity:.85; font-size:.8rem}
+  .verdict.taken{background:rgba(201,60,40,.16); color:#FFB3A6; border:1px solid rgba(201,60,40,.5)}
+  .verdict.adv{background:rgba(127,179,201,.14); color:#A9D2E1; border:1px solid rgba(127,179,201,.4)}
+  .verdict.soft{background:rgba(201,162,78,.12); color:var(--gold); border:1px solid var(--line)}
+  .verdict.free{background:rgba(134,185,138,.16); color:#A6D6AA; border:1px solid rgba(134,185,138,.4)}
+  #grid tbody tr.taken{background:rgba(201,60,40,.1)}
+  #grid tbody tr.taken:hover{background:rgba(201,60,40,.16)}
+  #grid tbody tr.taken>td:first-child{box-shadow:inset 3px 0 0 #E0533E}
+  @media (max-width:720px){ #grid tbody tr.taken{border-inline-start:3px solid #E0533E} }
+
   /* expandable row editor (finance / inventory) */
   .editgrid{
     display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.6rem;
@@ -210,6 +226,11 @@
 
 <section class="filters" id="filters">
   <input class="search" id="q" type="search" placeholder="بحث: اسم، هاتف، رقم، مدينة…">
+  <span class="dc-wrap">
+    <button type="button" class="btn btn--ghost btn--sm" id="dateCheckBtn" title="اختر تاريخاً لفحص توفّره فوراً">📅 فحص تاريخ</button>
+    <input type="date" id="dateCheckInput" aria-label="اختر تاريخاً للفحص">
+  </span>
+  <span class="chip dc-chip" id="dateCheckChip" style="display:none"></span>
   <div class="chips" id="statusChips"></div>
   <select id="month"><option value="">كل الشهور</option></select>
   <label class="toggle"><input type="checkbox" id="upcoming"> القادمة فقط</label>
@@ -223,6 +244,7 @@
 </section>
 
 <main class="wrap">
+  <div class="verdict" id="dateVerdict" style="display:none"></div>
   <div class="tablebox" id="gridbox"><table id="grid">
     <thead><tr>
       <th>الرقم</th><th>الاسم</th><th>الهاتف</th><th>تاريخ المناسبة</th><th>النوع</th>
@@ -270,7 +292,7 @@ const STATUS_COLORS = {
   'ملغي':      ['rgba(201,123,106,.16)', '#C97B6A'],
 };
 
-const state = { meta:null, rows:[], conflicts:new Set(), tab:'bookings', filters:{ q:'', statusIn:[], statusEx:[], month:'', upcoming:false, nopast:false, order:'date' }, editing:null, remainTouched:false };
+const state = { meta:null, rows:[], conflicts:new Set(), tab:'bookings', filters:{ q:'', statusIn:[], statusEx:[], month:'', upcoming:false, nopast:false, order:'date', dateCheck:'' }, editing:null, remainTouched:false };
 
 async function api(path, opts={}) {
   const res = await fetch(path, { headers:{'Content-Type':'application/json'}, ...opts });
@@ -334,6 +356,7 @@ function renderChips() {
     statuses.map((s) => `<button class="chip${cls(s)}" data-s="${esc(s)}"
       title="اضغط: تضمين · مرة ثانية: استبعاد ✕ · ثالثة: إلغاء">${esc(s)}${counts[s] ? ` · ${counts[s]}` : ''}</button>`).join('');
   $$('.chip', box).forEach((b) => b.onclick = () => {
+    clearDateCheck(false);
     const s = b.dataset.s;
     if (!s) { f.statusIn = []; f.statusEx = []; }
     else if (f.statusIn.includes(s)) { f.statusIn = f.statusIn.filter((x) => x !== s); f.statusEx.push(s); }
@@ -356,15 +379,47 @@ function badge(s) {
   return `<span class="badge" style="background:${bg};color:${fg}">${esc(s || '—')}</span>`;
 }
 
+// Status priority for the date check: real bookings first, then advance, inquiries, cancelled last.
+const DATE_RANK = (s) => s === 'مؤكد' || s === 'مكتمل' ? 0 : s === 'دفع العربون' ? 1 : s === 'ملغي' ? 3 : 2;
+
+// Verdict banner for the quick date-availability check (فحص تاريخ).
+function renderVerdict(iso) {
+  const el = $('#dateVerdict');
+  const count = (test) => state.rows.filter(test).length;
+  const actual = count((r) => r.status === 'مؤكد' || r.status === 'مكتمل');
+  const adv = count((r) => r.status === 'دفع العربون');
+  const soft = count((r) => r.status === 'استفسار' || r.status === 'عرض سعر');
+  const d = dmy(iso);
+  let cls, msg;
+  if (actual) { cls = 'taken'; msg = `🔴 التاريخ ${d} محجوز — ${actual} حجز مؤكد <small>الصفوف الحمراء أعلى الجدول</small>`; }
+  else if (adv) { cls = 'adv'; msg = `🔵 التاريخ ${d} بانتظار دفع العربون (${adv}) <small>غير مؤكد بالكامل بعد</small>`; }
+  else if (soft) { cls = 'soft'; msg = `🟡 التاريخ ${d} — استفسار / عرض سعر فقط (${soft}) <small>لا يوجد حجز مؤكد</small>`; }
+  else { cls = 'free'; msg = `🟢 التاريخ ${d} متاح <small>${state.rows.length ? 'لا شيء عليه سوى حجوزات ملغاة' : 'لا شيء على هذا التاريخ'}</small>`; }
+  el.className = 'verdict ' + cls;
+  el.innerHTML = `<span>${msg}</span><button type="button" class="btn btn--ghost btn--sm" id="dcAnother" style="margin-inline-start:auto">فحص تاريخ آخر</button>`;
+  el.style.display = '';
+  $('#dcAnother').onclick = openDatePicker;
+}
+
 function renderRows() {
   const tb = $('#grid tbody');
+  const dc = state.filters.dateCheck;
+  if (dc) {
+    // date-availability check: float the real bookings to the top, verdict banner above
+    state.rows.sort((a, b) => DATE_RANK(a.status) - DATE_RANK(b.status)
+      || String(a.start_time || '').localeCompare(String(b.start_time || '')) || a.id - b.id);
+    renderVerdict(dc);
+  } else {
+    $('#dateVerdict').style.display = 'none';
+  }
   if (!state.rows.length) {
     tb.innerHTML = `<tr><td colspan="10"><div class="empty">لا نتائج</div></td></tr>`;
   } else {
     tb.innerHTML = state.rows.map((r) => {
       const wa = waLink(r.phone);
-      const clash = r.event_date && r.status !== 'ملغي' && state.conflicts.has(r.event_date);
-      return `<tr data-id="${r.id}">
+      const taken = dc && (r.status === 'مؤكد' || r.status === 'مكتمل');
+      const clash = !dc && r.event_date && r.status !== 'ملغي' && state.conflicts.has(r.event_date);
+      return `<tr data-id="${r.id}"${taken ? ' class="taken"' : ''}>
         <td data-l="الرقم" class="num muted">${esc(r.booking_no || '—')}</td>
         <td data-l="الاسم"><b>${esc(fullName(r))}</b>${r.source==='website' ? ' <span class="muted" style="font-size:.7rem">من الموقع</span>':''}</td>
         <td data-l="الهاتف" class="num">${esc(r.phone || '—')} ${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="واتساب">✆</a>` : ''}</td>
@@ -781,14 +836,20 @@ async function loadMeta() {
 async function loadRows() {
   const f = state.filters;
   const p = new URLSearchParams();
-  if (state.tab === 'callback') p.set('callback', '1');
-  if (f.q) p.set('q', f.q);
-  if (f.statusIn.length) p.set('status', f.statusIn.join(','));
-  if (f.statusEx.length) p.set('xstatus', f.statusEx.join(','));
-  if (f.month) p.set('month', f.month);
-  if (f.upcoming) p.set('upcoming', '1');
-  if (f.nopast) p.set('nopast', '1');
-  p.set('order', f.order);
+  if (f.dateCheck) {
+    // exact-date availability check overrides the other filters — show everything on that day
+    p.set('date', f.dateCheck);
+    p.set('order', 'date');
+  } else {
+    if (state.tab === 'callback') p.set('callback', '1');
+    if (f.q) p.set('q', f.q);
+    if (f.statusIn.length) p.set('status', f.statusIn.join(','));
+    if (f.statusEx.length) p.set('xstatus', f.statusEx.join(','));
+    if (f.month) p.set('month', f.month);
+    if (f.upcoming) p.set('upcoming', '1');
+    if (f.nopast) p.set('nopast', '1');
+    p.set('order', f.order);
+  }
   const data = await api('/office/api/bookings?' + p);
   state.rows = data.rows;
   state.conflicts = new Set(data.conflict_dates || []);
@@ -1010,15 +1071,42 @@ $('#csvBtn').onclick = () => {
   URL.revokeObjectURL(a.href);
 };
 
+// ---------- quick date-availability check (فحص تاريخ) ----------
+function openDatePicker() {
+  const inp = $('#dateCheckInput');
+  try { inp.showPicker(); } catch { inp.focus(); }
+}
+function setDateCheck(iso) {
+  if (!iso) return;
+  state.filters.dateCheck = iso;
+  const chip = $('#dateCheckChip');
+  chip.textContent = `📅 ${dmy(iso)} ✕`;
+  chip.style.display = '';
+  loadRows();
+}
+// Leaving the check returns to the normal list. reload=false when another filter is taking
+// over (it will load itself); reload=true when the owner explicitly clears the check.
+function clearDateCheck(reload) {
+  const was = state.filters.dateCheck;
+  state.filters.dateCheck = '';
+  $('#dateCheckInput').value = '';
+  $('#dateCheckChip').style.display = 'none';
+  $('#dateVerdict').style.display = 'none';
+  if (reload && was) loadRows();
+}
+$('#dateCheckBtn').onclick = openDatePicker;
+$('#dateCheckInput').onchange = (e) => setDateCheck(e.target.value);
+$('#dateCheckChip').onclick = () => clearDateCheck(true);
+
 let qTimer;
 $('#q').addEventListener('input', (e) => {
   clearTimeout(qTimer);
-  qTimer = setTimeout(() => { state.filters.q = e.target.value.trim(); loadRows(); }, 300);
+  qTimer = setTimeout(() => { clearDateCheck(false); state.filters.q = e.target.value.trim(); loadRows(); }, 300);
 });
-$('#month').onchange = (e) => { state.filters.month = e.target.value; loadRows(); };
-$('#upcoming').onchange = (e) => { state.filters.upcoming = e.target.checked; loadRows(); };
-$('#nopast').onchange = (e) => { state.filters.nopast = e.target.checked; loadRows(); };
-$('#order').onchange = (e) => { state.filters.order = e.target.value; loadRows(); };
+$('#month').onchange = (e) => { clearDateCheck(false); state.filters.month = e.target.value; loadRows(); };
+$('#upcoming').onchange = (e) => { clearDateCheck(false); state.filters.upcoming = e.target.checked; loadRows(); };
+$('#nopast').onchange = (e) => { clearDateCheck(false); state.filters.nopast = e.target.checked; loadRows(); };
+$('#order').onchange = (e) => { clearDateCheck(false); state.filters.order = e.target.value; loadRows(); };
 
 const PANES = { bookings: '#gridbox', callback: '#gridbox', cities: '#pricing', finance: '#finance', inventory: '#inventory', visitors: '#visitors', capi: '#capi' };
 $$('#tabs button').forEach((b) => b.onclick = () => {
@@ -1026,6 +1114,7 @@ $$('#tabs button').forEach((b) => b.onclick = () => {
   state.tab = b.dataset.tab;
   const pane = PANES[state.tab];
   $('#filters').style.display = pane === '#gridbox' ? '' : 'none';
+  $('#dateVerdict').style.display = 'none';
   for (const sel of ['#gridbox', '#pricing', '#finance', '#inventory', '#visitors', '#capi']) $(sel).style.display = sel === pane ? '' : 'none';
   if (state.tab === 'cities') loadPricing().catch(() => {});
   else if (state.tab === 'finance') loadFinance().catch(() => {});
