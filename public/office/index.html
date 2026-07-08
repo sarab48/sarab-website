@@ -294,6 +294,19 @@ const waLink = (phone) => {
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+// The fullest name we can show. The office edits first_name/last_name but the legacy
+// `name` field (set once from the website form) is never re-synced — so a record can
+// carry both a short/blank `name` and a complete first+last. Prefer first+last when both
+// are present (never shortening a longer stored name, e.g. a 3-part website name), then
+// fall back to `name`, then to whichever part exists. Fixes short names in the grid and
+// blank names in CAPI.
+const fullName = (r) => {
+  const parts = [r.first_name, r.last_name].filter(Boolean).join(' ').trim();
+  const nm = String(r.name || '').trim();
+  if (parts && (!nm || parts.length >= nm.length)) return parts;
+  return nm || parts || '—';
+};
+
 function toast(msg, err=false) {
   const t = $('#toast');
   t.textContent = msg; t.className = err ? 'err' : ''; t.style.display = 'block';
@@ -353,7 +366,7 @@ function renderRows() {
       const clash = r.event_date && r.status !== 'ملغي' && state.conflicts.has(r.event_date);
       return `<tr data-id="${r.id}">
         <td data-l="الرقم" class="num muted">${esc(r.booking_no || '—')}</td>
-        <td data-l="الاسم"><b>${esc(r.name || [r.first_name, r.last_name].filter(Boolean).join(' ') || '—')}</b>${r.source==='website' ? ' <span class="muted" style="font-size:.7rem">من الموقع</span>':''}</td>
+        <td data-l="الاسم"><b>${esc(fullName(r))}</b>${r.source==='website' ? ' <span class="muted" style="font-size:.7rem">من الموقع</span>':''}</td>
         <td data-l="الهاتف" class="num">${esc(r.phone || '—')} ${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="واتساب">✆</a>` : ''}</td>
         <td data-l="تاريخ المناسبة" class="num${clash ? ' dateflag' : ''}"${clash ? ' title="أكثر من حجز حيّ على هذا التاريخ!"' : ''}>${dmy(r.event_date)}</td>
         <td data-l="النوع">${esc(r.occasion || '—')}</td>
@@ -676,43 +689,71 @@ const fromMeta = (r) => {
   try { return JSON.parse(r.extra || '{}').attribution?.fbclid === 1 } catch { return false }
 };
 
-let CAPI = [];
+// Split the Meta-sourced bookings so the real conversion count is never muddied by the
+// ones still on a deposit. مؤكد + مكتمل = 100%-approved, actual bookings; دفع العربون =
+// advance paid, still awaiting full payment & confirmation.
+let CAPI_CONF = [];
+let CAPI_ADV = [];
 let CAPI_ALL = 0;
 async function loadCapi() {
   const { rows } = await api('/office/api/bookings?status=' + encodeURIComponent('مؤكد,دفع العربون,مكتمل') + '&order=date&limit=1000');
   CAPI_ALL = rows.length;
   // The workbook's rule: only Meta-sourced customers who actually BOOKED enter CAPI.
   // Setting مصدر العميل = إعلان ممول (Meta) on a booking adds it here automatically.
-  CAPI = rows.filter(fromMeta);
+  const meta = rows.filter(fromMeta);
+  CAPI_CONF = meta.filter((r) => r.status === 'مؤكد' || r.status === 'مكتمل');
+  CAPI_ADV = meta.filter((r) => r.status === 'دفع العربون');
   renderCapi();
 }
 function renderCapi() {
   const box = $('#capi');
-  const total = CAPI.reduce((s, r) => s + (Number(r.price) || 0), 0);
+  const confVal = CAPI_CONF.reduce((s, r) => s + (Number(r.price) || 0), 0);
+  const advVal = CAPI_ADV.reduce((s, r) => s + (Number(r.price) || 0), 0);
+  const advIn = CAPI_ADV.reduce((s, r) => s + (Number(r.deposit) || 0), 0);
   box.innerHTML = `
     <section class="kpis" style="padding:0">
-      <div class="kpi gold"><b>${CAPI.length}</b><span>حجوزات من إعلانات ميتا (مؤكد / عربون / مكتمل)</span></div>
-      <div class="kpi"><b>${money(total)}</b><span>قيمة حجوزات ميتا</span></div>
+      <div class="kpi gold"><b>${CAPI_CONF.length}</b><span>حجوزات ميتا مؤكدة (مؤكد / مكتمل)</span></div>
+      <div class="kpi"><b>${money(confVal)}</b><span>قيمة الحجوزات المؤكدة</span></div>
+      <div class="kpi"><b>${CAPI_ADV.length}</b><span>عرابين بانتظار التأكيد (دفع العربون)</span></div>
+      <div class="kpi"><b>${money(advVal)}</b><span>قيمة العرابين المنتظرة</span></div>
       <div class="kpi"><b>${CAPI_ALL}</b><span>إجمالي الحجوزات الفعلية (كل المصادر)</span></div>
     </section>
     <div class="addrow" style="padding:0">
-      <button class="btn btn--sm" id="capiCsv">تنزيل CSV بصيغة ميتا ⬇</button>
-      <span class="muted" style="font-size:.78rem">حدّد «مصدر العميل = إعلان ممول (Meta)» على الحجز ليُضاف هنا تلقائياً — يُرفع في Events Manager → Offline events</span>
+      <button class="btn btn--sm" id="capiCsv">تنزيل CSV بصيغة ميتا (المؤكدة) ⬇</button>
+      <span class="muted" style="font-size:.78rem">حدّد «مصدر العميل = إعلان ممول (Meta)» على الحجز ليُضاف هنا تلقائياً — يُرفع في Events Manager → Offline events. يُصدّر الملف الحجوزات المؤكدة فقط.</span>
     </div>
+
+    <div class="finhead"><b>✓ حجوزات ميتا مؤكدة</b><span class="muted">حجوزات فعلية 100% — مؤكدة أو مكتملة</span></div>
     <div class="tablebox"><table>
-      <thead><tr><th>order_id</th><th>الاسم</th><th>التاريخ</th><th>القيمة</th><th>الهاتف (دولي)</th><th>المدينة</th></tr></thead>
-      <tbody>${CAPI.map((r) => `<tr>
+      <thead><tr><th>order_id</th><th>الاسم</th><th>التاريخ</th><th>القيمة</th><th>الهاتف (دولي)</th><th>المدينة</th><th>الحالة</th></tr></thead>
+      <tbody>${CAPI_CONF.map((r) => `<tr>
         <td class="num muted">${esc(r.booking_no || '#' + r.id)}</td>
-        <td><b>${esc(r.name || '—')}</b></td>
+        <td><b>${esc(fullName(r))}</b></td>
         <td class="num">${dmy(r.event_date)}</td>
         <td class="num">${money(r.price)}</td>
         <td class="num">${intlPhone(r.phone) || '—'}</td>
         <td>${esc(r.city || '—')}</td>
-      </tr>`).join('') || '<tr><td colspan="6"><div class="empty">لا حجوزات من ميتا بعد — حدّد مصدر العميل على الحجوزات</div></td></tr>'}</tbody>
+        <td>${badge(r.status)}</td>
+      </tr>`).join('') || '<tr><td colspan="7"><div class="empty">لا حجوزات ميتا مؤكدة بعد — حدّد مصدر العميل على الحجوزات</div></td></tr>'}</tbody>
+    </table></div>
+
+    <div class="finhead"><b>⏳ عرابين — بانتظار الدفع والتأكيد</b><span class="muted">دفعوا عربوناً ولم يؤكّدوا بالكامل بعد — خارج العدّ المؤكد</span></div>
+    <div class="tablebox"><table>
+      <thead><tr><th>order_id</th><th>الاسم</th><th>التاريخ</th><th>السعر الكامل</th><th>العربون المدفوع</th><th>المتبقي</th><th>الهاتف (دولي)</th><th>المدينة</th></tr></thead>
+      <tbody>${CAPI_ADV.map((r) => `<tr>
+        <td class="num muted">${esc(r.booking_no || '#' + r.id)}</td>
+        <td><b>${esc(fullName(r))}</b></td>
+        <td class="num">${dmy(r.event_date)}</td>
+        <td class="num">${money(r.price)}</td>
+        <td class="num pos">${money(r.deposit)}</td>
+        <td class="num">${money(r.remaining)}</td>
+        <td class="num">${intlPhone(r.phone) || '—'}</td>
+        <td>${esc(r.city || '—')}</td>
+      </tr>`).join('') || '<tr><td colspan="8"><div class="empty">لا عرابين بانتظار التأكيد</div></td></tr>'}</tbody>
     </table></div>`;
   $('#capiCsv').onclick = () => {
     const head = ['order_id','event_name','event_time','value','currency','email','phone','fn','ln','ct','st','country','action_source','data_processing_options'];
-    const lines = CAPI.map((r) => [
+    const lines = CAPI_CONF.map((r) => [
       r.booking_no || '#' + r.id,
       'Purchase',
       (r.event_date || new Date().toISOString().slice(0, 10)) + 'T12:00:00',
@@ -869,7 +910,7 @@ function openDrawer(id) {
   const row = id ? state.rows.find((r) => r.id === id) : null;
   state.editing = row ? row.id : null;
   state.remainTouched = !!row;
-  $('#dTitle').textContent = row ? `${row.booking_no || '#' + row.id} — ${row.name || ''}` : 'حجز جديد';
+  $('#dTitle').textContent = row ? `${row.booking_no || '#' + row.id} — ${fullName(row)}` : 'حجز جديد';
   $('#dBody').innerHTML = '<div class="field full intel" id="intel" style="display:none"></div>' + F.map(fieldHtml).join('');
   for (const [key,, kind] of F) {
     const el = $('#f_' + key);
@@ -916,7 +957,7 @@ function openDrawer(id) {
   const del = $('#delBtn');
   del.style.display = row ? '' : 'none';
   del.onclick = !row ? null : () => {
-    if (!confirm(`حذف ${row.booking_no || '#' + row.id} — ${row.name || ''} نهائياً؟ لا يمكن التراجع.`)) return;
+    if (!confirm(`حذف ${row.booking_no || '#' + row.id} — ${fullName(row)} نهائياً؟ لا يمكن التراجع.`)) return;
     api('/office/api/bookings/' + row.id, { method: 'DELETE' })
       .then(() => { closeDrawer(); toast('حُذف ✓'); return Promise.all([loadMeta(), loadRows()]); })
       .catch((e) => { if (e.message !== 'unauthorized') toast('لم يُحذف', true); });
