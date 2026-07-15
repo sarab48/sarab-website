@@ -970,7 +970,7 @@ async function loadIntel() {
 function openDrawer(id) {
   const row = id ? state.rows.find((r) => r.id === id) : null;
   state.editing = row ? row.id : null;
-  state.remainTouched = !!row;
+  state.remainTouched = false;
   $('#dTitle').textContent = row ? `${row.booking_no || '#' + row.id} — ${fullName(row)}` : 'حجز جديد';
   $('#dBody').innerHTML = '<div class="field full intel" id="intel" style="display:none"></div>' + F.map(fieldHtml).join('');
   for (const [key,, kind] of F) {
@@ -999,7 +999,8 @@ function openDrawer(id) {
       } else { occ.value = prev; }
     });
   }
-  // auto-suggest remaining = price − deposit until the owner edits remaining manually
+  // remaining auto-recalcs from price − deposit (new AND existing bookings);
+  // a manual edit of remaining wins for the rest of this drawer session
   $('#f_remaining').addEventListener('input', () => state.remainTouched = true);
   for (const k of ['price', 'deposit']) $('#f_' + k).addEventListener('input', () => {
     if (state.remainTouched) return;
