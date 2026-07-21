@@ -2,7 +2,8 @@
   /office/api/finance — الأرباح والمصاريف (per-event) + مصاريف عامة + finance KPIs.
   Writes take { table: 'event' | 'general', id?, ...fields }. For event rows the
   totals are recomputed server-side: total_expenses = Σ cost fields,
-  net_profit = price − total_expenses (the workbook's own formula).
+  net_profit = paid − total_expenses (owner's rule: net income counts the money
+  actually received, not the demanded price).
   Auth: ../_middleware.js.
 */
 
@@ -30,6 +31,7 @@ async function payload(env) {
     env.DB.prepare(`SELECT
       (SELECT COALESCE(SUM(price),0)   FROM bookings WHERE status IN ('مؤكد','دفع العربون','مكتمل')) AS revenue,
       (SELECT COALESCE(SUM(deposit),0) FROM bookings WHERE status IN ('مؤكد','دفع العربون','مكتمل')) AS collected,
+      (SELECT COALESCE(SUM(paid),0)    FROM event_finances) AS ev_paid,
       (SELECT COALESCE(SUM(total_expenses),0) FROM event_finances) AS ev_expenses,
       (SELECT COALESCE(SUM(amount),0)  FROM general_expenses) AS gen_expenses`),
     // Advances (عربون) already collected on confirmed bookings that haven't happened yet —
@@ -48,7 +50,7 @@ async function recomputeEvent(env, id) {
   if (!r) return
   const total = COSTS.reduce((s, k) => s + (Number(r[k]) || 0), 0)
   await env.DB.prepare('UPDATE event_finances SET total_expenses = ?1, net_profit = ?2 WHERE id = ?3')
-    .bind(total, (Number(r.price) || 0) - total, id).run()
+    .bind(total, (Number(r.paid) || 0) - total, id).run()
 }
 
 export async function onRequestGet({ env }) {

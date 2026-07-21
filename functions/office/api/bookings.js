@@ -42,12 +42,13 @@ export async function ensureEventFinance(env, row) {
   const paid = priceVal != null
     ? priceVal - (Number.isFinite(remaining) ? remaining : 0)
     : Number.isFinite(deposit) ? deposit : null
+  // net_profit seeds from what was actually received (paid), matching the finance rule.
   await env.DB.prepare(
     `INSERT INTO event_finances
        (booking_no, event_date, city, client, price, paid, total_expenses, net_profit)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7)`
   ).bind(row.booking_no, row.event_date || null, row.city || null, row.name || null,
-    priceVal, paid, priceVal ?? 0).run()
+    priceVal, paid, paid ?? 0).run()
 }
 
 export async function onRequestGet({ request, env }) {
@@ -87,8 +88,12 @@ export async function onRequestGet({ request, env }) {
                ORDER BY ${order} LIMIT ${limit}`
   const [list, conf] = await Promise.all([
     env.DB.prepare(sql).bind(...params).all(),
-    // Dates carrying 2+ live bookings — the UI flags these red (double-booking risk).
-    env.DB.prepare(`SELECT event_date FROM bookings
+    // Dates carrying 2+ live bookings. Severity depends on whether one of them is an
+    // actual confirmed booking (مؤكد/مكتمل): that's a real double-booking risk (red);
+    // several unconfirmed requests on the same date are only competition (amber).
+    env.DB.prepare(`SELECT event_date,
+                      MAX(CASE WHEN status IN ('مؤكد','مكتمل') THEN 1 ELSE 0 END) AS confirmed
+                    FROM bookings
                     WHERE event_date IS NOT NULL AND status != 'ملغي'
                     GROUP BY event_date HAVING COUNT(*) > 1`).all(),
   ])
@@ -96,6 +101,7 @@ export async function onRequestGet({ request, env }) {
     ok: true,
     rows: list.results,
     conflict_dates: conf.results.map((r) => r.event_date),
+    confirmed_clash_dates: conf.results.filter((r) => r.confirmed).map((r) => r.event_date),
   })
 }
 

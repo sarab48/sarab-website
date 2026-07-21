@@ -137,9 +137,20 @@
   .intel .busy{color:var(--warn)}
   .intel .actions{display:flex; gap:.5rem; flex-wrap:wrap}
 
-  /* red flag on dates that carry 2+ live bookings */
+  /* flags on dates that carry 2+ live bookings:
+     red = one of them is a confirmed booking (real double-booking danger)
+     amber = only unconfirmed requests compete on the date */
   .dateflag{color:#FF8A7A; font-weight:800}
   .dateflag::before{content:'⚠ '}
+  .dateflag--soft{color:#E8C377}
+  .dateflag--soft::before{content:'◔ '}
+
+  /* totals row at the bottom of finance tables */
+  tfoot td{
+    border-top:2px solid rgba(201,162,78,.4); border-bottom:none;
+    background:rgba(201,162,78,.07); font-weight:800; color:var(--ivory);
+  }
+  tfoot td:first-child{color:var(--gold)}
 
   /* quick date-availability check: a filter button that pops the calendar, a verdict
      banner, and any real booking on that date floated to the top and flagged red */
@@ -218,6 +229,7 @@
   <button data-tab="bookings" class="on">الحجوزات</button>
   <button data-tab="callback">إعادة الاتصال</button>
   <button data-tab="finance">المالية</button>
+  <button data-tab="insights">التحليلات</button>
   <button data-tab="inventory">المخزون</button>
   <button data-tab="visitors">الزوار</button>
   <button data-tab="capi">ميتا CAPI</button>
@@ -254,6 +266,7 @@
   </table></div>
   <div class="pricing" id="pricing" style="display:none"></div>
   <div class="pricing" id="finance" style="display:none"></div>
+  <div class="pricing" id="insights" style="display:none"></div>
   <div class="pricing" id="inventory" style="display:none"></div>
   <div class="pricing" id="visitors" style="display:none"></div>
   <div class="pricing" id="capi" style="display:none"></div>
@@ -292,7 +305,7 @@ const STATUS_COLORS = {
   'ملغي':      ['rgba(201,123,106,.16)', '#C97B6A'],
 };
 
-const state = { meta:null, rows:[], conflicts:new Set(), tab:'bookings', filters:{ q:'', statusIn:[], statusEx:[], month:'', upcoming:false, nopast:false, order:'date', dateCheck:'' }, editing:null, remainTouched:false };
+const state = { meta:null, rows:[], conflicts:new Set(), confirmedClashes:new Set(), tab:'bookings', filters:{ q:'', statusIn:[], statusEx:[], month:'', upcoming:false, nopast:false, order:'date', dateCheck:'' }, editing:null, remainTouched:false };
 
 async function api(path, opts={}) {
   const res = await fetch(path, { headers:{'Content-Type':'application/json'}, ...opts });
@@ -419,11 +432,15 @@ function renderRows() {
       const wa = waLink(r.phone);
       const taken = dc && (r.status === 'مؤكد' || r.status === 'مكتمل');
       const clash = !dc && r.event_date && r.status !== 'ملغي' && state.conflicts.has(r.event_date);
+      const hard = clash && state.confirmedClashes.has(r.event_date);
+      const flagCls = hard ? ' dateflag' : clash ? ' dateflag dateflag--soft' : '';
+      const flagTitle = hard ? 'التاريخ عليه حجز مؤكد + طلبات أخرى — خطر حجز مزدوج!'
+        : clash ? 'أكثر من طلب غير مؤكد على هذا التاريخ' : '';
       return `<tr data-id="${r.id}"${taken ? ' class="taken"' : ''}>
         <td data-l="الرقم" class="num muted">${esc(r.booking_no || '—')}</td>
         <td data-l="الاسم"><b>${esc(fullName(r))}</b>${r.source==='website' ? ' <span class="muted" style="font-size:.7rem">من الموقع</span>':''}</td>
         <td data-l="الهاتف" class="num">${esc(r.phone || '—')} ${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="واتساب">✆</a>` : ''}</td>
-        <td data-l="تاريخ المناسبة" class="num${clash ? ' dateflag' : ''}"${clash ? ' title="أكثر من حجز حيّ على هذا التاريخ!"' : ''}>${dmy(r.event_date)}</td>
+        <td data-l="تاريخ المناسبة" class="num${flagCls}"${flagTitle ? ` title="${flagTitle}"` : ''}>${dmy(r.event_date)}</td>
         <td data-l="النوع">${esc(r.occasion || '—')}</td>
         <td data-l="المدينة">${esc(r.city || '—')}</td>
         <td data-l="القاعة">${esc(r.venue || '—')}</td>
@@ -586,20 +603,25 @@ function wireEditors(tablebox, def, send) {
 }
 
 let FIN = null;
+const sumCol = (rows, k) => rows.reduce((s, r) => s + (Number(r[k]) || 0), 0);
 async function loadFinance() { FIN = await api('/office/api/finance'); renderFinance(); }
 function renderFinance() {
   const k = FIN.kpi;
-  const net = (k.revenue || 0) - (k.ev_expenses || 0) - (k.gen_expenses || 0);
   const adv = FIN.advances || [];
-  const advIn = adv.reduce((s, r) => s + (Number(r.deposit) || 0), 0);
-  const advDue = adv.reduce((s, r) => s + (Number(r.remaining) || 0), 0);
+  const advIn = sumCol(adv, 'deposit');
+  const advDue = sumCol(adv, 'remaining');
+  // Net income counts the money actually RECEIVED (paid on events + advances in hand),
+  // never the demanded price.
+  const received = (k.ev_paid || 0) + advIn;
+  const net = received - (k.ev_expenses || 0) - (k.gen_expenses || 0);
+  const evNet = sumCol(FIN.events, 'net_profit');
   const box = $('#finance');
   box.innerHTML = `
     <section class="kpis" style="padding:0">
-      <div class="kpi gold"><b>${money(k.revenue)}</b><span>إيرادات مؤكدة (أسعار الحجوزات)</span></div>
-      <div class="kpi"><b>${money(k.collected)}</b><span>عرابين محصّلة</span></div>
+      <div class="kpi"><b>${money(k.revenue)}</b><span>إيرادات متوقعة (أسعار الحجوزات)</span></div>
+      <div class="kpi gold"><b>${money(received)}</b><span>محصّل فعلياً (مدفوعات + عرابين)</span></div>
       <div class="kpi"><b>${money((k.ev_expenses || 0) + (k.gen_expenses || 0))}</b><span>إجمالي المصاريف</span></div>
-      <div class="kpi"><b class="${net >= 0 ? 'pos' : 'neg'}">${money(net)}</b><span>صافي تقريبي</span></div>
+      <div class="kpi gold"><b class="${net >= 0 ? 'pos' : 'neg'}">${money(net)}</b><span>صافي الدخل (من المحصّل فعلياً)</span></div>
     </section>
 
     <div class="finhead">
@@ -618,6 +640,10 @@ function renderFinance() {
         <td class="num">${money(r.remaining)}</td>
         <td>${badge(r.status)}</td>
       </tr>`).join('') || '<tr><td colspan="8"><div class="empty">لا عرابين محصّلة من حجوزات قادمة بعد</div></td></tr>'}</tbody>
+      ${adv.length ? `<tfoot><tr><td colspan="4">المجموع (${adv.length})</td>
+        <td class="num">${money(sumCol(adv, 'price'))}</td>
+        <td class="num pos">${money(advIn)}</td>
+        <td class="num">${money(advDue)}</td><td></td></tr></tfoot>` : ''}
     </table>
     <div class="addrow"><span class="muted" style="font-size:.8rem">حجوزات مؤكدة دفعت عربوناً ولم تُنجز بعد — للاطّلاع فقط (تُدار من تبويب الحجوزات)</span></div></div>
 
@@ -633,8 +659,13 @@ function renderFinance() {
         <td class="num">${money(e.total_expenses)}</td>
         <td class="num ${(e.net_profit ?? 0) >= 0 ? 'pos' : 'neg'}">${money(e.net_profit)}</td>
       </tr>`).join('') || '<tr><td colspan="8"><div class="empty">لا سطور بعد</div></td></tr>'}</tbody>
+      ${FIN.events.length ? `<tfoot><tr><td colspan="4">المجموع (${FIN.events.length})</td>
+        <td class="num">${money(sumCol(FIN.events, 'price'))}</td>
+        <td class="num">${money(sumCol(FIN.events, 'paid'))}</td>
+        <td class="num">${money(sumCol(FIN.events, 'total_expenses'))}</td>
+        <td class="num ${evNet >= 0 ? 'pos' : 'neg'}">${money(evNet)}</td></tr></tfoot>` : ''}
     </table>
-    <div class="addrow"><span class="muted" style="font-size:.8rem">أرباح ومصاريف المناسبات — اضغط على سطر للتعديل، والمصاريف والصافي يُحسبان تلقائياً</span><button class="btn btn--sm fadd">+ إضافة مناسبة</button></div></div>
+    <div class="addrow"><span class="muted" style="font-size:.8rem">أرباح ومصاريف المناسبات — اضغط على سطر للتعديل، والمصاريف والصافي (المدفوع − المصاريف) يُحسبان تلقائياً</span><button class="btn btn--sm fadd">+ إضافة مناسبة</button></div></div>
 
     <div class="tablebox" id="fingen"><table>
       <thead><tr><th>التاريخ</th><th>الفئة</th><th>الوصف</th><th>المبلغ</th><th>طريقة الدفع</th><th>ملاحظات</th></tr></thead>
@@ -646,6 +677,9 @@ function renderFinance() {
         <td>${esc(g.method || '—')}</td>
         <td>${esc(g.notes || '—')}</td>
       </tr>`).join('') || '<tr><td colspan="6"><div class="empty">لا مصاريف عامة بعد</div></td></tr>'}</tbody>
+      ${FIN.general.length ? `<tfoot><tr><td colspan="3">المجموع (${FIN.general.length})</td>
+        <td class="num neg">${money(sumCol(FIN.general, 'amount'))}</td>
+        <td colspan="2"></td></tr></tfoot>` : ''}
     </table>
     <div class="addrow"><span class="muted" style="font-size:.8rem">المصاريف العامة</span><button class="btn btn--sm fadd">+ إضافة مصروف</button></div></div>`;
 
@@ -680,6 +714,66 @@ function renderInventory() {
       .then((r) => { INV = r; renderInventory(); toast('تم ✓'); })
       .catch((e) => { if (e.message !== 'unauthorized') toast('لم يُحفظ', true); });
   wireEditors($('#invbox', box), INVF, send);
+}
+
+// ---------- insights (تحليلات الحجوزات — business intelligence) ----------
+
+let INS = null;
+async function loadInsights() { INS = await api('/office/api/insights'); renderInsights(); }
+function renderInsights() {
+  const s = INS;
+  const k = s.kpi;
+  const DAY = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  const conv = k.clients ? (k.booked / k.clients * 100).toFixed(0) : 0;
+  const topClients = s.cities[0];
+  const topBooked = [...s.cities].sort((a, b) => b.booked - a.booked || b.clients - a.clients)[0];
+  const topRevenue = [...s.cities].sort((a, b) => b.revenue - a.revenue)[0];
+  const mLabel = (m) => m.split('-')[1] + ' / ' + m.split('-')[0];
+  const box = $('#insights');
+  box.innerHTML = `
+    <section class="kpis" style="padding:0">
+      <div class="kpi gold"><b>${k.clients || 0}</b><span>إجمالي العملاء (كل من تواصل)</span></div>
+      <div class="kpi gold"><b>${k.booked || 0}</b><span>حجوزات فعلية (مؤكد / عربون / مكتمل)</span></div>
+      <div class="kpi"><b>${conv}%</b><span>نسبة التحويل: عميل ← حجز</span></div>
+      <div class="kpi"><b>${money(Math.round(k.avg_price || 0))}</b><span>متوسط سعر الحجز</span></div>
+      <div class="kpi gold"><b>${esc(topClients ? topClients.k : '—')}</b><span>أكثر مدينة عملاءً${topClients ? ` (${topClients.clients})` : ''}</span></div>
+      <div class="kpi gold"><b>${esc(topBooked && topBooked.booked ? topBooked.k : '—')}</b><span>أكثر مدينة حجوزات${topBooked && topBooked.booked ? ` (${topBooked.booked})` : ''}</span></div>
+      <div class="kpi"><b>${esc(topRevenue && topRevenue.revenue ? topRevenue.k : '—')}</b><span>أعلى مدينة إيرادات${topRevenue && topRevenue.revenue ? ` (${money(topRevenue.revenue)})` : ''}</span></div>
+      <div class="kpi"><b>${k.cancelled || 0}</b><span>حجوزات ملغاة</span></div>
+    </section>
+
+    <div class="finhead"><b>🏙 المدن — من أين يأتي العمل؟</b><span class="muted">مرتّبة حسب عدد العملاء · الحجوزات = مؤكد/عربون/مكتمل</span></div>
+    <div class="tablebox"><table style="min-width:0">
+      <thead><tr><th>المدينة</th><th>العملاء</th><th>حجوزات فعلية</th><th>نسبة التحويل</th><th>الإيرادات (أسعار)</th></tr></thead>
+      <tbody>${s.cities.map((c) => `<tr>
+        <td><b>${esc(c.k)}</b></td>
+        <td class="num">${c.clients}</td>
+        <td class="num">${c.booked}</td>
+        <td class="num">${c.clients ? (c.booked / c.clients * 100).toFixed(0) : 0}%</td>
+        <td class="num">${money(c.revenue)}</td>
+      </tr>`).join('') || '<tr><td colspan="5"><div class="empty">لا بيانات بعد</div></td></tr>'}</tbody>
+      ${s.cities.length ? `<tfoot><tr><td>المجموع (${s.cities.length} مدينة)</td>
+        <td class="num">${sumCol(s.cities, 'clients')}</td>
+        <td class="num">${sumCol(s.cities, 'booked')}</td>
+        <td class="num">${conv}%</td>
+        <td class="num">${money(sumCol(s.cities, 'revenue'))}</td></tr></tfoot>` : ''}
+    </table></div>
+
+    <div class="finhead"><b>🎉 أنواع المناسبات</b><span class="muted">أي المناسبات تجلب أكثر حجوزات وإيرادات؟</span></div>
+    <div class="tablebox"><table style="min-width:0">
+      <thead><tr><th>النوع</th><th>العملاء</th><th>حجوزات فعلية</th><th>الإيرادات (أسعار)</th></tr></thead>
+      <tbody>${s.occasions.map((c) => `<tr>
+        <td><b>${esc(c.k)}</b></td>
+        <td class="num">${c.clients}</td>
+        <td class="num">${c.booked}</td>
+        <td class="num">${money(c.revenue)}</td>
+      </tr>`).join('') || '<tr><td colspan="4"><div class="empty">لا بيانات بعد</div></td></tr>'}</tbody>
+    </table></div>
+
+    ${bars('الحجوزات الفعلية بالشهر (شهر المناسبة)', s.months.map((r) => ({ k: mLabel(r.k), n: r.n })))}
+    ${bars('مصادر العملاء — من أين يسمعون عنا؟', s.sources.map((r) => ({ k: `${r.k} (حجوزات: ${r.booked})`, n: r.clients })))}
+    ${bars('أيام الأسبوع الأكثر حجزاً', s.weekdays.map((r) => ({ k: DAY[r.k] || r.k, n: r.n })))}
+    ${bars('القاعات الأكثر تكراراً', s.venues)}`;
 }
 
 // ---------- visitors (analytics) & Meta CAPI ----------
@@ -853,6 +947,7 @@ async function loadRows() {
   const data = await api('/office/api/bookings?' + p);
   state.rows = data.rows;
   state.conflicts = new Set(data.conflict_dates || []);
+  state.confirmedClashes = new Set(data.confirmed_clash_dates || []);
   $('#grid thead').innerHTML = GRID_HEAD;
   renderRows();
 }
@@ -1109,16 +1204,17 @@ $('#upcoming').onchange = (e) => { clearDateCheck(false); state.filters.upcoming
 $('#nopast').onchange = (e) => { clearDateCheck(false); state.filters.nopast = e.target.checked; loadRows(); };
 $('#order').onchange = (e) => { clearDateCheck(false); state.filters.order = e.target.value; loadRows(); };
 
-const PANES = { bookings: '#gridbox', callback: '#gridbox', cities: '#pricing', finance: '#finance', inventory: '#inventory', visitors: '#visitors', capi: '#capi' };
+const PANES = { bookings: '#gridbox', callback: '#gridbox', cities: '#pricing', finance: '#finance', insights: '#insights', inventory: '#inventory', visitors: '#visitors', capi: '#capi' };
 $$('#tabs button').forEach((b) => b.onclick = () => {
   $$('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
   state.tab = b.dataset.tab;
   const pane = PANES[state.tab];
   $('#filters').style.display = pane === '#gridbox' ? '' : 'none';
   $('#dateVerdict').style.display = 'none';
-  for (const sel of ['#gridbox', '#pricing', '#finance', '#inventory', '#visitors', '#capi']) $(sel).style.display = sel === pane ? '' : 'none';
+  for (const sel of ['#gridbox', '#pricing', '#finance', '#insights', '#inventory', '#visitors', '#capi']) $(sel).style.display = sel === pane ? '' : 'none';
   if (state.tab === 'cities') loadPricing().catch(() => {});
   else if (state.tab === 'finance') loadFinance().catch(() => {});
+  else if (state.tab === 'insights') loadInsights().catch(() => {});
   else if (state.tab === 'inventory') loadInventory().catch(() => {});
   else if (state.tab === 'visitors') loadVisitors().catch(() => {});
   else if (state.tab === 'capi') loadCapi().catch(() => {});
