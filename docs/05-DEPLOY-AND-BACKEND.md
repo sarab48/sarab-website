@@ -353,3 +353,26 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
   covered by the privacy wording (usage data/statistics). DNT still honored.
 - **a11y button:** smaller + translucent at rest (opacity .55 → 1 on hover/open) so it
   no longer covers the scroll cue.
+
+### 2026-07-21 — office dash: paid-based net, clash colors, totals, التحليلات tab
+- **Net income = money actually received** (owner rule): per-event `net_profit = paid −
+  total_expenses` (was price-based) in finance API + `ensureEventFinance` seeding; the
+  المالية KPI row now shows إيرادات متوقعة (prices) vs محصّل فعلياً (Σ event paid +
+  advances in hand) and صافي الدخل computed from the latter.
+- **Date-clash severity**: bookings API returns `confirmed_clash_dates` beside
+  `conflict_dates`; the grid flags a clash date red only when a مؤكد/مكتمل booking sits
+  on it (real double-booking danger), amber (`.dateflag--soft`) when only unconfirmed
+  requests compete.
+- **Totals rows**: `<tfoot>` المجموع on all three finance tables (advances / event P&L /
+  general expenses).
+- **New التحليلات tab** backed by `/office/api/insights`: KPIs (clients, actual bookings,
+  conversion %, avg price, top city by clients/bookings/revenue), city + occasion tables,
+  bars for months, lead sources, weekdays, venues. "Actual booking" = مؤكد/عربون/مكتمل.
+- **Data migration**: `UPDATE event_finances SET net_profit = COALESCE(paid,0) −
+  COALESCE(total_expenses,0)` — applied locally; remote pending owner run (permission
+  gate). Full remote backup first: `ops/db-backups/2026-07-21-pre-netprofit-recompute/`
+  (per-table JSON dumps — the D1 export endpoint was erroring CF-side, 10001).
+- Verified: headless (red/amber flags per status mix, finance net 1,280 = 1,500+500−720,
+  3 tfoots, insights renders, zero console errors) + live probes (apex/www 200, office
+  Access-walled, `edit.` Worker alive, DNS read-back: all prod records present,
+  EMAIL_API_TOKEN intact).
