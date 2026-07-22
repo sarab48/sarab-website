@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS inventory (
 -- القوائم (dropdown vocabularies + settings; `pos` keeps the owner's order)
 CREATE TABLE IF NOT EXISTS options (
   id    INTEGER PRIMARY KEY AUTOINCREMENT,
-  kind  TEXT NOT NULL,  -- status | occasion | payment_status | lead_source | interest | expense_category | setting
+  kind  TEXT NOT NULL,  -- status | occasion | payment_status | lead_source | interest | expense_category | setting | meta_campaign (owner-added Meta campaign names; managed from the office CAPI tab)
   value TEXT NOT NULL,
   pos   INTEGER
 );

@@ -376,3 +376,26 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
   3 tfoots, insights renders, zero console errors) + live probes (apex/www 200, office
   Access-walled, `edit.` Worker alive, DNS read-back: all prod records present,
   EMAIL_API_TOKEN intact).
+
+### 2026-07-22 — Meta campaign sources: per-campaign CAPI tracking
+- **Why**: a second Meta ad campaign is launching; the owner needs to see which campaign
+  each booking came from while everything still feeds the same CAPI sheet.
+- **Owner-managed campaign list**: new `options` kind `meta_campaign` (no schema change).
+  Managed from the ميتا CAPI tab (add / delete, confirm-guarded); campaign names appear
+  in the «مصدر العميل» dropdown automatically (merged after «إعلان ممول (Meta)» by
+  `/office/api/meta`). New endpoint `functions/office/api/options.js` (POST/DELETE,
+  kind-allowlisted; 409 on any name that already exists as a lead_source or campaign —
+  a collision would silently re-label old bookings as Meta conversions).
+- **CAPI counts every campaign**: `fromMeta` now matches the base source OR any listed
+  campaign (fbclid auto-attribution fallback unchanged), so all campaigns flow into the
+  confirmed/advance tables and the single Events-Manager CSV — one offline-events sheet
+  for all campaigns, exactly as Meta expects (Meta attributes offline conversions to the
+  right campaign by user matching; the per-campaign split here is for the owner's eyes).
+- **Per-campaign funnel table** in the CAPI tab: عملاء (all statuses) / مؤكد+مكتمل /
+  confirmed value / عرابين / conversion % per campaign; deleting a campaign keeps the
+  bookings' lead_source text but removes them from CAPI (stated in the confirm).
+  التحليلات lead-source bars split per campaign automatically (groups by lead_source).
+- Verified headless (`_vcampaign.mjs`): API validation (400 bad kind/empty, 409 clash),
+  UI add → dropdown + table row, booking on campaign → CAPI KPI +1 + row funnel
+  (1 lead / 1 conf / 2,600 ₪ / 100%), duplicate rejected, delete → out of CAPI, zero
+  console errors. Local-only test data; no remote D1 writes.

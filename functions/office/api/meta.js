@@ -39,6 +39,17 @@ export async function onRequestGet({ env, data }) {
   opts.occasion = [...curatedOcc, ...usedOcc].filter((o) => o !== OTHER)
   if ([...curatedOcc, ...usedOcc].includes(OTHER)) opts.occasion.push(OTHER)
 
+  // Meta campaign names (owner-managed in the ميتا CAPI tab, kind = meta_campaign) join
+  // the مصدر العميل dropdown right after the base Meta entry, so each booking can be
+  // tagged with its exact campaign — and every campaign counts as Meta in CAPI.
+  const ls = opts.lead_source || []
+  const camps = (opts.meta_campaign || []).filter((c) => !ls.includes(c))
+  if (camps.length) {
+    const at = ls.indexOf('إعلان ممول (Meta)')
+    ls.splice(at === -1 ? ls.length : at + 1, 0, ...camps)
+    opts.lead_source = ls
+  }
+
   return Response.json({
     ok: true,
     email: data.accessEmail,

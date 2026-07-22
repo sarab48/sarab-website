@@ -833,8 +833,12 @@ function renderVisitors() {
 }
 
 const intlPhone = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.startsWith('0') ? '972' + d.slice(1) : d; };
+// The base Meta source plus every campaign the owner added in the CAPI tab — a booking
+// carrying ANY of these in مصدر العميل is a Meta conversion.
+const LEGACY_META = 'إعلان ممول (Meta)';
+const metaSources = () => [LEGACY_META, ...(state.meta?.options?.meta_campaign || [])];
 const fromMeta = (r) => {
-  if (r.lead_source === 'إعلان ممول (Meta)') return true;
+  if (metaSources().includes(r.lead_source)) return true;
   try { return JSON.parse(r.extra || '{}').attribution?.fbclid === 1 } catch { return false }
 };
 
@@ -844,15 +848,48 @@ const fromMeta = (r) => {
 let CAPI_CONF = [];
 let CAPI_ADV = [];
 let CAPI_ALL = 0;
+let CAPI_ROWS = [];
 async function loadCapi() {
-  const { rows } = await api('/office/api/bookings?status=' + encodeURIComponent('مؤكد,دفع العربون,مكتمل') + '&order=date&limit=1000');
-  CAPI_ALL = rows.length;
+  // All statuses, so the per-campaign table can count inquiries too (the funnel top).
+  const { rows } = await api('/office/api/bookings?order=date&limit=1000');
+  CAPI_ROWS = rows;
+  CAPI_ALL = rows.filter((r) => ['مؤكد', 'دفع العربون', 'مكتمل'].includes(r.status)).length;
   // The workbook's rule: only Meta-sourced customers who actually BOOKED enter CAPI.
-  // Setting مصدر العميل = إعلان ممول (Meta) on a booking adds it here automatically.
+  // Setting مصدر العميل to the Meta source or any campaign adds a booking automatically.
   const meta = rows.filter(fromMeta);
   CAPI_CONF = meta.filter((r) => r.status === 'مؤكد' || r.status === 'مكتمل');
   CAPI_ADV = meta.filter((r) => r.status === 'دفع العربون');
   renderCapi();
+}
+
+// Per-campaign funnel over every Meta-sourced booking: total leads (any status),
+// confirmed conversions + their value, deposits pending. Attribution-only rows
+// (fbclid, no listed source) fold into the base Meta entry.
+function campaignStats() {
+  const byCamp = new Map(metaSources().map((c) => [c, { camp: c, leads: 0, conf: 0, confVal: 0, adv: 0 }]));
+  for (const r of CAPI_ROWS) {
+    if (!fromMeta(r)) continue;
+    const s = byCamp.get(byCamp.has(r.lead_source) ? r.lead_source : LEGACY_META);
+    s.leads++;
+    if (r.status === 'مؤكد' || r.status === 'مكتمل') { s.conf++; s.confVal += Number(r.price) || 0; }
+    else if (r.status === 'دفع العربون') s.adv++;
+  }
+  return [...byCamp.values()];
+}
+
+async function addCampaign() {
+  const inp = $('#campName');
+  const v = (inp.value || '').trim();
+  if (!v) return inp.focus();
+  try {
+    await api('/office/api/options', { method: 'POST', body: JSON.stringify({ kind: 'meta_campaign', value: v }) });
+    toast(`أُضيفت حملة «${v}» ✓`);
+    await loadMeta();   // refresh vocabularies so the مصدر العميل dropdown includes it
+    await loadCapi();
+  } catch (e) {
+    if (e.message === 'unauthorized') return;
+    toast(e.message === 'exists' ? 'هذا الاسم موجود مسبقاً في المصادر' : 'تعذّرت الإضافة', true);
+  }
 }
 function renderCapi() {
   const box = $('#capi');
@@ -867,9 +904,29 @@ function renderCapi() {
       <div class="kpi"><b>${money(advVal)}</b><span>قيمة العرابين المنتظرة</span></div>
       <div class="kpi"><b>${CAPI_ALL}</b><span>إجمالي الحجوزات الفعلية (كل المصادر)</span></div>
     </section>
+
+    <div class="finhead"><b>🎯 حملات ميتا — أداء كل حملة</b><span class="muted">حدّد الحملة في «مصدر العميل» على الحجز — وكل الحملات تدخل CAPI تلقائياً</span></div>
+    <div class="tablebox"><table style="min-width:0">
+      <thead><tr><th>الحملة</th><th>عملاء (كل الحالات)</th><th>مؤكد/مكتمل</th><th>قيمة المؤكد</th><th>عرابين</th><th>تحويل</th><th></th></tr></thead>
+      <tbody>${campaignStats().map((s) => `<tr>
+        <td><b>${esc(s.camp)}</b>${s.camp === LEGACY_META ? ' <span class="muted" style="font-size:.7rem">المصدر الأساسي</span>' : ''}</td>
+        <td class="num">${s.leads}</td>
+        <td class="num">${s.conf}</td>
+        <td class="num">${money(s.confVal)}</td>
+        <td class="num">${s.adv}</td>
+        <td class="num">${s.leads ? Math.round(100 * s.conf / s.leads) + '%' : '—'}</td>
+        <td>${s.camp === LEGACY_META ? '' : `<button class="btn btn--sm btn--danger campDel" data-camp="${esc(s.camp)}">✕</button>`}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <div class="addrow">
+      <input id="campName" placeholder="اسم حملة جديدة… (مثال: ميتا — حملة آب)">
+      <button class="btn btn--sm" id="campAdd">+ إضافة حملة</button>
+      <span class="muted" style="font-size:.78rem">تظهر فوراً في قائمة «مصدر العميل»</span>
+    </div></div>
+
     <div class="addrow" style="padding:0">
       <button class="btn btn--sm" id="capiCsv">تنزيل CSV بصيغة ميتا (المؤكدة) ⬇</button>
-      <span class="muted" style="font-size:.78rem">حدّد «مصدر العميل = إعلان ممول (Meta)» على الحجز ليُضاف هنا تلقائياً — يُرفع في Events Manager → Offline events. يُصدّر الملف الحجوزات المؤكدة فقط.</span>
+      <span class="muted" style="font-size:.78rem">حدّد «مصدر العميل» على الحجز (المصدر الأساسي أو أي حملة) ليُضاف هنا تلقائياً — يُرفع في Events Manager → Offline events. يُصدّر الملف الحجوزات المؤكدة فقط، من كل الحملات معاً.</span>
     </div>
 
     <div class="finhead"><b>✓ حجوزات ميتا مؤكدة</b><span class="muted">حجوزات فعلية 100% — مؤكدة أو مكتملة</span></div>
@@ -900,6 +957,18 @@ function renderCapi() {
         <td>${esc(r.city || '—')}</td>
       </tr>`).join('') || '<tr><td colspan="8"><div class="empty">لا عرابين بانتظار التأكيد</div></td></tr>'}</tbody>
     </table></div>`;
+  $('#campAdd').onclick = addCampaign;
+  $('#campName').onkeydown = (e) => { if (e.key === 'Enter') addCampaign(); };
+  $$('.campDel', box).forEach((b) => b.onclick = async () => {
+    const v = b.dataset.camp;
+    if (!confirm(`حذف الحملة «${v}» من القائمة؟\nالحجوزات المسجّلة عليها تحتفظ بالمصدر، لكنها لن تُحسب ضمن ميتا CAPI بعد الحذف.`)) return;
+    try {
+      await api('/office/api/options', { method: 'DELETE', body: JSON.stringify({ kind: 'meta_campaign', value: v }) });
+      toast('حُذفت الحملة ✓');
+      await loadMeta();
+      await loadCapi();
+    } catch (e) { if (e.message !== 'unauthorized') toast('لم تُحذف', true); }
+  });
   $('#capiCsv').onclick = () => {
     const head = ['order_id','event_name','event_time','value','currency','email','phone','fn','ln','ct','st','country','action_source','data_processing_options'];
     const lines = CAPI_CONF.map((r) => [
