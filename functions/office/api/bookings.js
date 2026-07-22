@@ -2,6 +2,7 @@
   /office/api/bookings — GET: filtered list · POST: create (auto-assigns the next
   SARAB-NNN number, continuing the owner's numbering). Auth: ../_middleware.js.
 */
+import { normalizeCity } from '../../../shared/intel.js'
 
 // Fields the office may write. Numbers are coerced; anything else is text.
 const WRITABLE = [
@@ -49,6 +50,32 @@ export async function ensureEventFinance(env, row) {
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7)`
   ).bind(row.booking_no, row.event_date || null, row.city || null, row.name || null,
     priceVal, paid, paid ?? 0).run()
+}
+
+// When the owner books a client in a city the price list doesn't know yet, remember it:
+// the city joins the list at the price set for that client — reusing a tier that already
+// carries that exact price, else creating one — so the next client from the same city
+// gets the اعتماد السعر suggestion automatically. Normalized name matching (same rule as
+// the intel city match) keeps "الناصرة"/"ناصرة" from becoming two cities. Returns the
+// city name when it was added, else null.
+export async function ensureCityPrice(env, row) {
+  const name = String(row?.city || '').trim().slice(0, 100)
+  const price = Number(row?.price)
+  if (!name || !Number.isFinite(price) || price <= 0) return null
+  const { results } = await env.DB.prepare('SELECT name FROM cities').all()
+  const norm = normalizeCity(name)
+  if (results.some((c) => normalizeCity(c.name) === norm)) return null
+  let tier = await env.DB.prepare('SELECT id FROM price_tiers WHERE price = ?1 ORDER BY id LIMIT 1')
+    .bind(price).first()
+  if (!tier) {
+    const ins = await env.DB.prepare('INSERT INTO price_tiers (name, price) VALUES (?1, ?2)')
+      .bind(`فئة ${price} ₪`, price).run()
+    tier = { id: ins.meta.last_row_id }
+  }
+  try {
+    await env.DB.prepare('INSERT INTO cities (name, tier_id) VALUES (?1, ?2)').bind(name, tier.id).run()
+  } catch { return null } // UNIQUE race — someone beat us to it, which is fine
+  return name
 }
 
 export async function onRequestGet({ request, env }) {
@@ -134,5 +161,6 @@ export async function onRequestPost({ request, env }) {
   const { meta } = await env.DB.prepare(sql).bind(...cols.map((c) => row[c])).run()
   const created = await env.DB.prepare('SELECT * FROM bookings WHERE id = ?1').bind(meta.last_row_id).first()
   await ensureEventFinance(env, created)
-  return Response.json({ ok: true, row: created })
+  const cityAdded = await ensureCityPrice(env, created)
+  return Response.json({ ok: true, row: created, city_added: cityAdded })
 }

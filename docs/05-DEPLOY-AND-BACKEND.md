@@ -399,3 +399,18 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
   UI add → dropdown + table row, booking on campaign → CAPI KPI +1 + row funnel
   (1 lead / 1 conf / 2,600 ₪ / 100%), duplicate rejected, delete → out of CAPI, zero
   console errors. Local-only test data; no remote D1 writes.
+
+### 2026-07-22 — auto-city pricing: unknown city on a booking joins the price list
+- **Owner rule**: saving a booking (create or edit) whose city isn't priced yet, with a
+  price on the booking, adds that city to أسعار المدن at that price — reusing a tier
+  that already carries the exact price, else creating one named `فئة {price} ₪`
+  (renameable in the pricing tab). Next client from the city gets the اعتماد السعر
+  suggestion automatically. `ensureCityPrice` in `functions/office/api/bookings.js`,
+  called from POST + PATCH; response carries `city_added` and the drawer toast says so.
+- Normalized-name dedup (same `normalizeCity` as the intel match) so «الناصرة»/«ناصرة»
+  never become two cities; no price → no add; UNIQUE race swallowed.
+- Verified headless (`_vcity.mjs`): add at new price 3100 → new tier; normalized
+  duplicate + different price skipped (no stray tier); PATCH city at existing tier price
+  1800 → joined that tier (no new tier); no-price city not added; drawer intel then
+  offers اعتماد السعر 3,100 for the next client; `_vcampaign.mjs` re-run green; zero
+  console errors. Local-only test data, cleaned up.
