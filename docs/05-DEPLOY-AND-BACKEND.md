@@ -477,3 +477,26 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
 - First real live message minutes after connect: existing client (SARAB-082,
   دفع العربون) — linked to her booking, no duplicate, lead_source untouched. Confirms
   the no-overwrite guarantee on production data.
+
+### 2026-07-23 (3rd) — ad→campaign mapping · تاريخ الإضافة/تاريخ الحجز split · inline conversations
+- **Ad mapping**: CTWA referrals carry ad id + headline, never the campaign name. New
+  واتساب-tab box «ربط الإعلانات بالحملات»: distinct ads seen (headline, contact count)
+  with a campaign select (sources from meta_campaign options; empty = unmap). Stored as
+  options kind `wa_ad_map` value `adId|campaign`; webhook + to-booking resolve it via
+  `campaignForAd` so future leads from a mapped ad get lead_source = campaign directly;
+  mapping retro-tags that ad's WhatsApp bookings still on generic «إعلان ممول (Meta)»
+  (owner-set sources untouched). Unknown campaign → 400.
+- **Date semantics** (owner request): new `added_at` = first contact, on every creation
+  path (site form, office add, webhook lead, واتساب to-booking uses first message date);
+  `booked_at` = real booking date, auto-stamped `COALESCE(booked_at, date('now'))` when
+  status turns مؤكد/دفع العربون/مكتمل (PATCH + office POST; explicit value always wins).
+  Migration `2026-07-23-added-at.sql`: backfill added_at from old booked_at
+  (owner had used it as "added") else created_at date, then NULL booked_at on non-booked
+  rows. Remote run verified: 87/87 added_at, 14 booked kept, 0 wrong. Backup
+  `ops/db-backups/2026-07-23-pre-added-at/`. Drawer: added_at field + relabeled booked_at.
+- **Inline conversations**: clicking a contact opens the thread in an accordion row
+  directly under it (WhatsApp-style bubbles: customer start-aligned panel, owner
+  gold-tinted end-aligned, timestamps + أرشيف mark, newest scrolled into view, ✕ to
+  close, click name again toggles). No more jump-to-bottom.
+- `_vwa.mjs` green across all: added/booked semantics, booked-stamp on confirm,
+  map-ad 400/retag/auto-tag-next-lead, inline thread open/close, zero console errors.
