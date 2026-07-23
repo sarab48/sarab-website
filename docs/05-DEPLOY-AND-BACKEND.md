@@ -500,3 +500,10 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
   close, click name again toggles). No more jump-to-bottom.
 - `_vwa.mjs` green across all: added/booked semantics, booked-stamp on confirm,
   map-ad 400/retag/auto-tag-next-lead, inline thread open/close, zero console errors.
+
+### 2026-07-23 (4th) — status reactions no longer become استفسارات
+- Owner spotted a lead from a number that "never texted": Meta error 131060
+  (`type:"unsupported"` — a WhatsApp Status reaction or an instantly-deleted message)
+  arrives as a live inbound message. Now stored in wa_messages but skips auto-lead;
+  a later real message still creates the استفسار. Regression in `_vwa.mjs`. The one
+  such booking already created (#90) was left for the owner to keep or delete.
