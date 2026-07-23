@@ -519,3 +519,11 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
   labeling (الحالة/الاهتمام/المصدر…) happens in place. Drawer save/delete re-renders
   the واتساب tab when it's the active one. `_vwa.mjs`: notes-empty assertion,
   drawer-auto-open + chip-edit UI checks — all green.
+
+### 2026-07-23 (6th) — واتساب contacts now recognize manually-added clients
+- Owner found history-only contacts showing أضف كاستفسار despite having bookings
+  (added manually pre-automation; e.g. 0526439666 → SARAB-081 مؤكد). Scan found 66
+  such contacts. Contact summary now COALESCEs the explicit link with a phone match
+  (normalized bookings.phone LIKE %last-9-digits, latest booking wins), so any typing
+  style matches and the case can't recur; production wa_messages backfilled
+  (152 rows → 70 linked contacts, 0 matching-unlinked left). Bookings table untouched.
