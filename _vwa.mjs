@@ -123,6 +123,20 @@ const bk2 = await (await fetch(BASE + '/office/api/bookings?q=0501117788')).json
 const bkRe = await (await fetch(BASE + '/office/api/bookings/' + bk.rows[0].id)).json()
 results.campaigns = { retagged: results.map.retagged, oldNow: bkRe.row.lead_source, newLead: bk2.rows[0]?.lead_source, bothMatch: bkRe.row.lead_source === CAMPW && bk2.rows[0]?.lead_source === CAMPW }
 
+// --- 6d. client added manually BEFORE the automation: history-only contact must show
+//         the manual booking automatically (phone match, no click needed) ---
+const MANUAL_PHONE = '972503334455'
+const nb = await (await post(BASE + '/office/api/bookings', { name: 'عميل قديم يدوي', phone: '0503334455', status: 'مؤكد' })).json()
+await post(AUTH, wrap('history', {
+  messaging_product: 'whatsapp', metadata: meta,
+  history: [{ metadata: { phase: 0 }, threads: [{ id: MANUAL_PHONE, messages: [
+    { from: MANUAL_PHONE, id: 'wamid.OLDMAN1', timestamp: String(NOW - 4_000_000), type: 'text', text: { body: 'حجزنا معكم قبل' } },
+  ] }] }],
+}))
+const sum2 = await (await fetch(BASE + '/office/api/whatsapp')).json()
+const mc = sum2.contacts.find((c) => c.phone === MANUAL_PHONE)
+results.manualMatch = { linked: mc?.booking_id === nb.row.id, no: mc?.booking_no === nb.row.booking_no, status: mc?.status }
+
 // --- 7. UI: واتساب tab renders; history contact → أضف كاستفسار ---
 const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] })
 const page = await browser.newPage({ viewport: { width: 1440, height: 950 } })
@@ -161,7 +175,7 @@ await browser.close()
 
 // --- cleanup: local test rows out of bookings/options + wa tables ---
 let removed = 0
-for (const q of ['0501111222', '0502223334', '0501117788']) {
+for (const q of ['0501111222', '0502223334', '0501117788', '0503334455']) {
   const found = await (await fetch(BASE + '/office/api/bookings?q=' + q)).json()
   for (const r of found.rows) { await fetch(BASE + '/office/api/bookings/' + r.id, { method: 'DELETE' }); removed++ }
 }

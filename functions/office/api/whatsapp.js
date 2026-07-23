@@ -55,25 +55,35 @@ export async function onRequestGet({ request, env }) {
   }
 
   const [contacts, kpi] = await env.DB.batch([
+    // booking_id: an explicit link (set by the webhook / the add button) wins; else fall
+    // back to matching the number against bookings' phones (last 9 digits, any typing
+    // style) — so clients the owner added manually before the automation show their
+    // booking here without any click.
     env.DB.prepare(
-      `SELECT m.phone,
-              COALESCE(
-                (SELECT name FROM wa_messages WHERE phone = m.phone AND name IS NOT NULL ORDER BY ts DESC, id DESC LIMIT 1),
-                (SELECT name FROM wa_contacts WHERE phone = m.phone)
-              ) AS name,
-              COUNT(*) AS n,
-              MIN(m.ts) AS first_ts,
-              MAX(m.ts) AS last_ts,
-              MAX(CASE WHEN m.referral IS NOT NULL THEN 1 ELSE 0 END) AS from_ad,
-              (SELECT referral FROM wa_messages WHERE phone = m.phone AND referral IS NOT NULL ORDER BY ts DESC, id DESC LIMIT 1) AS referral,
-              (SELECT body FROM wa_messages WHERE phone = m.phone AND direction = 'in' AND body IS NOT NULL AND body != '' ORDER BY ts, id LIMIT 1) AS first_msg,
-              MAX(m.booking_id) AS booking_id,
-              b.booking_no, b.status
-       FROM wa_messages m
-       LEFT JOIN bookings b ON b.id = (SELECT MAX(booking_id) FROM wa_messages WHERE phone = m.phone)
-       WHERE m.phone IS NOT NULL AND m.direction IN ('in','out')
-       GROUP BY m.phone
-       ORDER BY last_ts DESC
+      `SELECT c.*, b.booking_no, b.status FROM (
+         SELECT m.phone,
+                COALESCE(
+                  (SELECT name FROM wa_messages WHERE phone = m.phone AND name IS NOT NULL ORDER BY ts DESC, id DESC LIMIT 1),
+                  (SELECT name FROM wa_contacts WHERE phone = m.phone)
+                ) AS name,
+                COUNT(*) AS n,
+                MIN(m.ts) AS first_ts,
+                MAX(m.ts) AS last_ts,
+                MAX(CASE WHEN m.referral IS NOT NULL THEN 1 ELSE 0 END) AS from_ad,
+                (SELECT referral FROM wa_messages WHERE phone = m.phone AND referral IS NOT NULL ORDER BY ts DESC, id DESC LIMIT 1) AS referral,
+                (SELECT body FROM wa_messages WHERE phone = m.phone AND direction = 'in' AND body IS NOT NULL AND body != '' ORDER BY ts, id LIMIT 1) AS first_msg,
+                COALESCE(
+                  MAX(m.booking_id),
+                  (SELECT bb.id FROM bookings bb
+                     WHERE replace(replace(replace(replace(bb.phone,' ',''),'-',''),'+',''),'.','') LIKE '%' || substr(m.phone, -9)
+                     ORDER BY bb.id DESC LIMIT 1)
+                ) AS booking_id
+         FROM wa_messages m
+         WHERE m.phone IS NOT NULL AND length(m.phone) >= 9 AND m.direction IN ('in','out')
+         GROUP BY m.phone
+       ) c
+       LEFT JOIN bookings b ON b.id = c.booking_id
+       ORDER BY c.last_ts DESC
        LIMIT 300`
     ),
     env.DB.prepare(
