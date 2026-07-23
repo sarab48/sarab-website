@@ -461,3 +461,19 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
   Meta-side onboarding checklist lives in the session handoff (provider signup →
   coexistence QR scan from the phone app → opt IN to chat-history share → webhook URL
   `https://sarabaibooth.com/api/wa-webhook?token=<value of ~/.secrets/sarab-wa-webhook-token>`).
+
+### 2026-07-23 (later) — WhatsApp LIVE via Dualhook; real history-sync shapes fixed
+- Owner connected the business number through **Dualhook** (coexistence QR onboarding,
+  chat history shared). Deploys + remote migration + secret puts ran owner-approved;
+  fresh pre-connect backup at `ops/db-backups/2026-07-23-pre-whatsapp/` (9 tables,
+  85 bookings verified before/after — untouched).
+- **Meta's history sync uses 3 shapes in practice**, two undocumented in our first cut:
+  sent messages arrive as `value.message_echoes` and received ones as `value.messages`,
+  both under `field:"history"` (only some chunks use the documented
+  `history[].threads[]`). Handler rewritten shape-driven (field only decides
+  origin/lead-eligibility); 137 raw-logged payloads from onboarding parsed and
+  backfilled (105 out + 32 in), log emptied — the raw-log safety net did its job,
+  zero messages lost. Regression tests for all shapes in `_vwa.mjs`.
+- First real live message minutes after connect: existing client (SARAB-082,
+  دفع العربون) — linked to her booking, no duplicate, lead_source untouched. Confirms
+  the no-overwrite guarantee on production data.
