@@ -267,15 +267,15 @@ async function linkOrCreateLead(env, m, name, waRowId, stats) {
     return
   }
 
-  const text = m.type === 'text' ? (m.text?.body || '') : ''
+  // notes stay empty on purpose (owner request 2026-07-23) — the first message is
+  // always visible in the واتساب tab, and ملاحظات is the owner's own space.
   const { meta } = await env.DB.prepare(
-    `INSERT INTO bookings (name, phone, lead_source, source, notes, extra, added_at)
-     VALUES (?1, ?2, ?3, 'whatsapp', ?4, ?5, date('now'))`
+    `INSERT INTO bookings (name, phone, lead_source, source, extra, added_at)
+     VALUES (?1, ?2, ?3, 'whatsapp', ?4, date('now'))`
   ).bind(
     name || null,
     localPhone(digits),
     metaSource || LEAD_WA,
-    text ? text.slice(0, 300) : null,
     JSON.stringify({ wa: { first_wamid: m.id || null, referral: referral || undefined } })
   ).run()
   await env.DB.prepare('UPDATE wa_messages SET booking_id = ?1 WHERE id = ?2')

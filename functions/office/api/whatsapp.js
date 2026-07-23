@@ -138,21 +138,21 @@ export async function onRequestPost({ request, env }) {
          (SELECT name FROM wa_messages WHERE phone = ?1 AND name IS NOT NULL ORDER BY ts DESC, id DESC LIMIT 1),
          (SELECT name FROM wa_contacts WHERE phone = ?1)
        ) AS name,
-       (SELECT body FROM wa_messages WHERE phone = ?1 AND direction = 'in' AND body IS NOT NULL AND body != '' ORDER BY ts, id LIMIT 1) AS first_msg,
        (SELECT referral FROM wa_messages WHERE phone = ?1 AND referral IS NOT NULL ORDER BY ts DESC, id DESC LIMIT 1) AS referral,
        (SELECT MIN(ts) FROM wa_messages WHERE phone = ?1 AND direction = 'in') AS first_ts`
   ).bind(phone).first()
 
   const referral = info?.referral ? JSON.parse(info.referral) : null
   const metaSource = referral ? (await campaignForAd(env.DB, referral)) || LEAD_META : null
+  // notes stay empty on purpose (owner request 2026-07-23) — the conversation lives
+  // in the واتساب tab; ملاحظات is the owner's own space.
   const { meta } = await env.DB.prepare(
-    `INSERT INTO bookings (name, phone, lead_source, source, notes, added_at, extra)
-     VALUES (?1, ?2, ?3, 'whatsapp', ?4, ?5, ?6)`
+    `INSERT INTO bookings (name, phone, lead_source, source, added_at, extra)
+     VALUES (?1, ?2, ?3, 'whatsapp', ?4, ?5)`
   ).bind(
     info?.name || null,
     localPhone(phone),
     metaSource || LEAD_WA,
-    info?.first_msg ? info.first_msg.slice(0, 300) : null,
     info?.first_ts ? info.first_ts.slice(0, 10) : null,
     JSON.stringify({ wa: { referral: referral || undefined, from_history: true } })
   ).run()

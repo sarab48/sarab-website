@@ -138,8 +138,18 @@ results.uiRows = await page.locator('#whatsapp tbody tr').count()
 results.uiAdChip = await page.locator('#whatsapp .chip:has-text("إعلان ميتا")').count()
 results.uiAdsBox = await page.locator('#whatsapp .waMap').count()
 await page.locator(`.waAdd[data-phone="${HIST_PHONE}"]`).click()
-await page.waitForTimeout(1200)
+await page.waitForTimeout(1500)
+// أضف كاستفسار now opens the editor drawer right away — label without switching tabs
+results.uiDrawerAuto = (await page.locator('#drawer.open').count()) === 1
+await page.locator('#closeBtn').click()
+await page.waitForTimeout(300)
 results.uiHistAdded = await page.locator(`#whatsapp .chip:has-text("استفسار")`).count() >= 1
+// booking chips are edit buttons now
+await page.locator('#whatsapp .waEdit').first().click()
+await page.waitForTimeout(600)
+results.uiChipEdit = (await page.locator('#drawer.open').count()) === 1
+await page.locator('#closeBtn').click()
+await page.waitForTimeout(300)
 // conversation opens INLINE under the clicked contact, and ✕ closes it
 await page.locator(`.waOpen[data-phone="${LEAD_PHONE}"]`).click()
 await page.waitForTimeout(600)
