@@ -507,3 +507,15 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
   arrives as a live inbound message. Now stored in wa_messages but skips auto-lead;
   a later real message still creates the استفسار. Regression in `_vwa.mjs`. The one
   such booking already created (#90) was left for the owner to keep or delete.
+
+### 2026-07-23 (5th) — clean notes + edit bookings straight from the واتساب tab
+- **Notes**: WhatsApp lead creation (webhook auto + أضف كاستفسار) no longer pre-fills
+  ملاحظات with the first message (owner request) — the conversation is always in the
+  tab itself. Production cleanup: exact-match auto-copied notes cleared (1 row, #95);
+  owner-written notes untouched by design (exact-match rule).
+- **Editing from the tab**: new `openDrawerById` (GETs the booking when it isn't in
+  the loaded grid rows and joins it to state.rows); booking chips in واتساب are now
+  edit links (✎), and أضف كاستفسار opens the drawer immediately after creating, so
+  labeling (الحالة/الاهتمام/المصدر…) happens in place. Drawer save/delete re-renders
+  the واتساب tab when it's the active one. `_vwa.mjs`: notes-empty assertion,
+  drawer-auto-open + chip-edit UI checks — all green.
