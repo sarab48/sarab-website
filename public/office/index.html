@@ -854,10 +854,13 @@ function renderWa() {
   const rows = WA.contacts;
   const adInfo = (r) => {
     if (!r.from_ad) return '—';
-    let t = 'إعلان ميتا';
-    try { const ref = JSON.parse(r.referral || '{}'); if (ref.headline) t = ref.headline; } catch {}
-    return `<span class="chip" style="background:rgba(201,162,78,.16);color:#C9A24E" title="${esc(t)}">إعلان ميتا</span>`;
+    let head = '', sid = '';
+    try { const ref = JSON.parse(r.referral || '{}'); head = ref.headline || ''; sid = String(ref.source_id || ''); } catch {}
+    const camp = (WA.ads || []).find((a) => a.source_id === sid)?.campaign;
+    const label = camp || (head ? head.slice(0, 28) : 'إعلان ميتا');
+    return `<span class="chip" style="background:rgba(201,162,78,.16);color:#C9A24E" title="${esc([camp, head].filter(Boolean).join(' — ') || 'إعلان ميتا')}">📣 ${esc(label)}</span>`;
   };
+  const campaigns = state.meta?.options?.meta_campaign || [];
   $('#whatsapp').innerHTML = `
     <section class="kpis" style="padding:0">
       <div class="kpi gold"><b>${k.contacts}</b><span>جهات تواصل</span></div>
@@ -866,10 +869,23 @@ function renderWa() {
       <div class="kpi"><b>${k.in_7d}</b><span>رسائل واردة — آخر 7 أيام</span></div>
       <div class="kpi"><b>${k.auto_leads}</b><span>استفسارات أُنشئت تلقائياً</span></div>
     </section>
+    ${(WA.ads || []).length ? `<div class="tablebox" style="margin-bottom:.8rem">
+      <b style="display:block;padding:.5rem .8rem">ربط الإعلانات بالحملات
+        <span class="muted" style="font-size:.75rem;font-weight:normal"> — ميتا يرسل عنوان الإعلان فقط؛ اربط كل إعلان بحملته مرة واحدة وكل عميل قادم منه يُسجَّل على الحملة تلقائياً (والقدامى غير المعدَّلين يُصحَّحون)</span></b>
+      <table style="min-width:0"><thead><tr><th>الإعلان</th><th>عملاء</th><th>الحملة</th></tr></thead>
+      <tbody>${WA.ads.map((a) => `<tr>
+        <td title="${esc(a.body || '')}">${esc(a.headline || 'إعلان ' + a.source_id)}</td>
+        <td class="num">${a.contacts}</td>
+        <td><select class="waMap" data-sid="${esc(a.source_id)}" ${campaigns.length ? '' : 'disabled'}>
+          <option value="">${campaigns.length ? '— اختر حملة —' : 'أضف حملاتك في تبويب ميتا CAPI أولاً'}</option>
+          ${campaigns.map((c) => `<option ${a.campaign === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+        </select></td>
+      </tr>`).join('')}</tbody></table>
+    </div>` : ''}
     ${rows.length ? `<div class="tablebox"><table>
       <thead><tr><th>الاسم</th><th>الهاتف</th><th>الرسائل</th><th>آخر رسالة</th><th>المصدر</th><th>أول رسالة واردة</th><th>الحجز</th></tr></thead>
-      <tbody>${rows.map((r) => `<tr>
-        <td><a href="#" class="waOpen" data-phone="${esc(r.phone)}" data-name="${esc(r.name || '')}"><b>${esc(r.name || waLocal(r.phone))}</b></a></td>
+      <tbody>${rows.map((r) => `<tr data-phone="${esc(r.phone)}">
+        <td><a href="#" class="waOpen" data-phone="${esc(r.phone)}" data-name="${esc(r.name || '')}"><b>${esc(r.name || waLocal(r.phone))}</b> <span class="muted" style="font-size:.7rem">▾</span></a></td>
         <td dir="ltr"><a href="https://wa.me/${esc(r.phone)}" target="_blank" rel="noopener">${esc(waLocal(r.phone))}</a></td>
         <td class="num">${r.n}</td>
         <td>${waWhen(r.last_ts)}</td>
@@ -879,29 +895,58 @@ function renderWa() {
           ? `<span class="chip">${esc(r.booking_no || '#' + r.booking_id)}${r.status ? ' · ' + esc(r.status) : ''}</span>`
           : `<button class="btn btn--ghost btn--sm waAdd" data-phone="${esc(r.phone)}">أضف كاستفسار</button>`}</td>
       </tr>`).join('')}</tbody>
-    </table></div>
-    <div id="waMsgs"></div>`
+    </table></div>`
     : `<div class="empty">لا رسائل بعد — بعد ربط رقم الواتساب بواجهة Cloud API ستظهر هنا كل رسالة تصلك،
        وكل رقم جديد يراسلك يُضاف تلقائياً كاستفسار في الحجوزات (مع اسم الحملة عندما يصل من إعلان).</div>`}`;
 
-  $$('.waAdd', $('#whatsapp')).forEach((b) => b.onclick = async () => {
+  $$('.waMap', $('#whatsapp')).forEach((s) => s.onchange = async () => {
+    try {
+      const res = await api('/office/api/whatsapp', { method: 'POST', body: JSON.stringify({ action: 'map-ad', source_id: s.dataset.sid, campaign: s.value }) });
+      toast(s.value ? `رُبط الإعلان بالحملة ✓${res.retagged ? ` — صُحِّح ${res.retagged} عميل` : ''}` : 'أُلغي الربط ✓');
+      await loadWa();
+    } catch (e) { if (e.message !== 'unauthorized') toast('لم يُربط', true); }
+  });
+  $$('.waAdd', $('#whatsapp')).forEach((b) => b.onclick = async (e) => {
+    e.stopPropagation();
     try {
       const res = await api('/office/api/whatsapp', { method: 'POST', body: JSON.stringify({ action: 'to-booking', phone: b.dataset.phone }) });
       toast(res.existing ? 'مرتبط بحجز موجود ✓' : 'أُضيف كاستفسار ✓');
       await loadWa();
-    } catch (e) { if (e.message !== 'unauthorized') toast('لم يُضف', true); }
+    } catch (e2) { if (e2.message !== 'unauthorized') toast('لم يُضف', true); }
   });
+  // Conversation opens inline, right under the clicked contact — like an accordion.
   $$('.waOpen', $('#whatsapp')).forEach((a) => a.onclick = async (e) => {
     e.preventDefault();
+    const tr = a.closest('tr');
+    const open = tr.nextElementSibling?.classList?.contains('waConv');
+    $$('.waConv', $('#whatsapp')).forEach((x) => x.remove());
+    if (open) return; // second click on the same name just closes it
     const { messages } = await api('/office/api/whatsapp?phone=' + a.dataset.phone);
-    $('#waMsgs').innerHTML = `<div class="tablebox" style="margin-top:.8rem">
-      <b style="display:block;padding:.5rem .8rem">محادثة ${esc(a.dataset.name || waLocal(a.dataset.phone))} <span class="muted" dir="ltr">${esc(waLocal(a.dataset.phone))}</span></b>
-      ${messages.map((m) => `<div style="padding:.35rem .8rem;border-top:1px solid var(--line);${m.direction === 'out' ? 'opacity:.75' : ''}">
-        <span class="muted" style="font-size:.72rem">${waWhen(m.ts)} · ${m.direction === 'out' ? 'أنا' : 'العميل'}${m.origin === 'history' ? ' · أرشيف' : ''}</span><br>
-        ${m.body ? esc(m.body) : `<i class="muted">[${esc(m.type)}]</i>`}
-      </div>`).join('') || '<div class="empty">لا رسائل</div>'}
-    </div>`;
-    $('#waMsgs').scrollIntoView({ behavior: 'smooth' });
+    const conv = document.createElement('tr');
+    conv.className = 'waConv';
+    conv.innerHTML = `<td colspan="7" style="padding:0;background:var(--bg)">
+      <div style="border:1px solid var(--line);border-radius:var(--r);margin:.5rem;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:.6rem;padding:.45rem .8rem;border-bottom:1px solid var(--line);background:var(--panel-2)">
+          <b>${esc(a.dataset.name || waLocal(a.dataset.phone))}</b>
+          <span class="muted" dir="ltr" style="font-size:.78rem">${esc(waLocal(a.dataset.phone))}</span>
+          <span class="muted" style="font-size:.72rem">${messages.length} رسالة</span>
+          <button class="btn btn--ghost btn--sm waConvX" style="margin-inline-start:auto;line-height:1" title="إغلاق">✕</button>
+        </div>
+        <div class="waThread" style="max-height:380px;overflow-y:auto;padding:.7rem .8rem;display:flex;flex-direction:column;gap:.4rem">
+          ${messages.map((m) => `
+          <div style="align-self:${m.direction === 'out' ? 'flex-end' : 'flex-start'};max-width:78%;
+                      background:${m.direction === 'out' ? 'rgba(201,162,78,.13)' : 'var(--panel-2)'};
+                      border:1px solid ${m.direction === 'out' ? 'rgba(201,162,78,.3)' : 'var(--line)'};
+                      border-radius:12px;padding:.4rem .65rem">
+            <div style="white-space:pre-wrap;word-break:break-word">${m.body ? esc(m.body) : `<i class="muted">[${esc(m.type)}]</i>`}</div>
+            <div class="muted" style="font-size:.68rem;margin-top:.15rem">${waWhen(m.ts)}${m.origin === 'history' ? ' · أرشيف' : ''}</div>
+          </div>`).join('') || '<div class="empty">لا رسائل</div>'}
+        </div>
+      </div></td>`;
+    tr.after(conv);
+    conv.querySelector('.waConvX').onclick = () => conv.remove();
+    const th = conv.querySelector('.waThread');
+    th.scrollTop = th.scrollHeight; // newest messages in view first
   });
 }
 
@@ -1102,7 +1147,8 @@ const F = [
   ['first_name', 'الاسم الأول'], ['last_name', 'اسم العائلة'],
   ['phone', 'الهاتف / واتساب'], ['city', 'المدينة', 'list:cities'],
   ['occasion', 'نوع المناسبة', 'combo:occasion'], ['venue', 'القاعة / المكان', 'list:venues'],
-  ['event_date', 'تاريخ المناسبة', 'date'], ['booked_at', 'تاريخ الحجز', 'date'],
+  ['event_date', 'تاريخ المناسبة', 'date'], ['added_at', 'تاريخ الإضافة (أول تواصل)', 'date'],
+  ['booked_at', 'تاريخ الحجز (يُسجَّل تلقائياً عند التأكيد)', 'date'],
   ['start_time', 'وقت البداية'], ['end_time', 'وقت النهاية'],
   ['hours', 'عدد الساعات', 'number'], ['guests', 'عدد الضيوف'],
   ['price', 'السعر الكامل', 'number'], ['deposit', 'العربون المدفوع', 'number'],

@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   booking_no     TEXT UNIQUE,          -- رقم الحجز (SARAB-NNN); dashboard assigns for new ones
   created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-  booked_at      TEXT,                 -- تاريخ الحجز
+  booked_at      TEXT,                 -- تاريخ الحجز (auto-set when status turns مؤكد/دفع العربون/مكتمل)
+  added_at       TEXT,                 -- تاريخ الإضافة — first contact (2026-07-23)
   event_date     TEXT,                 -- تاريخ المناسبة (YYYY-MM-DD)
   occasion       TEXT,                 -- نوع المناسبة
   first_name     TEXT,                 -- الاسم الأول

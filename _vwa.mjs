@@ -87,6 +87,30 @@ results.autoBooking = bk.rows.map((r) => ({ id: r.id, name: r.name, phone: r.pho
 const conv = await (await fetch(BASE + '/office/api/whatsapp?phone=' + LEAD_PHONE)).json()
 results.thread = conv.messages.map((m) => m.direction + ':' + (m.body || '').slice(0, 12))
 
+// --- 6b. added_at (first contact) vs booked_at (stamped on confirmation) ---
+const TODAY = new Date().toISOString().slice(0, 10)
+results.dates = { addedToday: bk.rows[0].added_at === TODAY, bookedEmpty: bk.rows[0].booked_at == null }
+const pat = await (await fetch(BASE + '/office/api/bookings/' + bk.rows[0].id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'مؤكد' }) })).json()
+results.bookedStamp = pat.row.booked_at === TODAY && pat.row.added_at === TODAY
+await fetch(BASE + '/office/api/bookings/' + bk.rows[0].id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'استفسار' }) })
+
+// --- 6c. ad → campaign mapping: teach once, retag old, auto-tag the next lead ---
+const CAMPW = 'ميتا — حملة واتساب اختبار'
+await post(BASE + '/office/api/options', { kind: 'meta_campaign', value: CAMPW })
+results.mapUnknown = (await post(BASE + '/office/api/whatsapp', { action: 'map-ad', source_id: '1200999', campaign: 'حملة غير معروفة' })).status
+results.map = await (await post(BASE + '/office/api/whatsapp', { action: 'map-ad', source_id: '1200999', campaign: CAMPW })).json()
+const LEAD2 = '972501117788'
+results.live3 = await (await post(AUTH, wrap('messages', {
+  messaging_product: 'whatsapp', metadata: meta,
+  contacts: [{ profile: { name: 'اختبار حملة' }, wa_id: LEAD2 }],
+  messages: [{ from: LEAD2, id: 'wamid.TEST3', timestamp: String(NOW + 300), type: 'text',
+    text: { body: 'شفت الإعلان' },
+    referral: { source_url: 'https://fb.me/xyz', source_type: 'ad', source_id: '1200999', headline: 'SARAB — فوتوبوث بالذكاء الاصطناعي', ctwa_clid: 'clid-def' } }],
+}))).json()
+const bk2 = await (await fetch(BASE + '/office/api/bookings?q=0501117788')).json()
+const bkRe = await (await fetch(BASE + '/office/api/bookings/' + bk.rows[0].id)).json()
+results.campaigns = { retagged: results.map.retagged, oldNow: bkRe.row.lead_source, newLead: bk2.rows[0]?.lead_source, bothMatch: bkRe.row.lead_source === CAMPW && bk2.rows[0]?.lead_source === CAMPW }
+
 // --- 7. UI: واتساب tab renders; history contact → أضف كاستفسار ---
 const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] })
 const page = await browser.newPage({ viewport: { width: 1440, height: 950 } })
@@ -100,20 +124,28 @@ await page.waitForSelector('#whatsapp .kpi', { timeout: 10000 })
 results.uiKpis = await page.locator('#whatsapp .kpi b').allTextContents()
 results.uiRows = await page.locator('#whatsapp tbody tr').count()
 results.uiAdChip = await page.locator('#whatsapp .chip:has-text("إعلان ميتا")').count()
+results.uiAdsBox = await page.locator('#whatsapp .waMap').count()
 await page.locator(`.waAdd[data-phone="${HIST_PHONE}"]`).click()
 await page.waitForTimeout(1200)
 results.uiHistAdded = await page.locator(`#whatsapp .chip:has-text("استفسار")`).count() >= 1
-// open the lead's conversation
+// conversation opens INLINE under the clicked contact, and ✕ closes it
 await page.locator(`.waOpen[data-phone="${LEAD_PHONE}"]`).click()
 await page.waitForTimeout(600)
-results.uiThread = (await page.locator('#waMsgs').textContent())?.includes('كم سعر الفوتوبوث')
+const convRow = page.locator(`tr[data-phone="${LEAD_PHONE}"] + tr.waConv`)
+results.uiThread = (await convRow.count()) === 1 && ((await convRow.textContent())?.includes('كم سعر الفوتوبوث') ?? false)
+await convRow.locator('.waConvX').click()
+results.uiThreadClosed = (await page.locator('tr.waConv').count()) === 0
 await browser.close()
 
-// --- cleanup: local test rows out of bookings + wa tables ---
-for (const r of results.autoBooking) await fetch(BASE + '/office/api/bookings/' + r.id, { method: 'DELETE' })
-const bk2 = await (await fetch(BASE + '/office/api/bookings?q=0502223334')).json()
-for (const r of bk2.rows) await fetch(BASE + '/office/api/bookings/' + r.id, { method: 'DELETE' })
-results.cleanup = 'bookings removed: ' + (results.autoBooking.length + bk2.rows.length) + ' (wa_messages test rows stay local-only)'
+// --- cleanup: local test rows out of bookings/options + wa tables ---
+let removed = 0
+for (const q of ['0501111222', '0502223334', '0501117788']) {
+  const found = await (await fetch(BASE + '/office/api/bookings?q=' + q)).json()
+  for (const r of found.rows) { await fetch(BASE + '/office/api/bookings/' + r.id, { method: 'DELETE' }); removed++ }
+}
+await post(BASE + '/office/api/whatsapp', { action: 'map-ad', source_id: '1200999', campaign: '' })
+await fetch(BASE + '/office/api/options', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'meta_campaign', value: CAMPW }) })
+results.cleanup = 'bookings removed: ' + removed + ', campaign + ad map removed (wa_messages test rows stay local-only)'
 
 console.log(JSON.stringify(results, null, 2))
 console.log('PAGE ERRORS:', errors.length ? errors : 'none')

@@ -4,10 +4,10 @@
   normally stay as the ملغي status).
   Auth: ../../_middleware.js.
 */
-import { cleanValue, ensureEventFinance, ensureCityPrice } from '../bookings.js'
+import { cleanValue, ensureEventFinance, ensureCityPrice, BOOKED_STATUSES } from '../bookings.js'
 
 const WRITABLE = [
-  'booked_at', 'event_date', 'occasion', 'first_name', 'last_name', 'name', 'phone',
+  'booked_at', 'added_at', 'event_date', 'occasion', 'first_name', 'last_name', 'name', 'phone',
   'email', 'city', 'region', 'venue', 'start_time', 'end_time', 'hours', 'guests',
   'package', 'price', 'deposit', 'remaining', 'payment_status', 'arrival_time',
   'lead_source', 'interest', 'callback', 'notes', 'status',
@@ -32,6 +32,12 @@ export async function onRequestPatch({ request, env, params }) {
     vals.push(v === undefined ? null : v)
   }
   if (!sets.length) return Response.json({ ok: false, error: 'no-fields' }, { status: 400 })
+
+  // Turning into a real booking stamps تاريخ الحجز automatically (never overwrites an
+  // explicit value — neither one already saved nor one sent in this same edit).
+  if (BOOKED_STATUSES.includes(body.status) && !('booked_at' in body)) {
+    sets.push("booked_at = COALESCE(booked_at, date('now'))")
+  }
 
   vals.push(Number(params.id))
   const { meta } = await env.DB.prepare(`UPDATE bookings SET ${sets.join(', ')} WHERE id = ?${vals.length}`)

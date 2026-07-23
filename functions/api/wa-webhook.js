@@ -231,12 +231,25 @@ export async function findBookingByPhone(db, digits) {
 export const localPhone = (digits) =>
   digits.startsWith('972') ? '0' + digits.slice(-9) : digits
 
+// The CTWA referral names the ad (id + headline) but not the owner's campaign — that
+// link is taught once in the واتساب tab (options kind wa_ad_map, value "adId|campaign")
+// and applied automatically to every later lead from the same ad.
+export async function campaignForAd(db, referral) {
+  const sid = String(referral?.source_id || '')
+  if (!sid) return null
+  const row = await db.prepare(
+    "SELECT value FROM options WHERE kind = 'wa_ad_map' AND value LIKE ?1 LIMIT 1"
+  ).bind(sid + '|%').first()
+  return row ? row.value.slice(sid.length + 1) : null
+}
+
 // Live inbound only: a known number links to its booking (an empty lead_source gets
 // filled when the ad referral says Meta); an unknown number becomes a fresh استفسار.
 async function linkOrCreateLead(env, m, name, waRowId, stats) {
   const digits = String(m.from || '').replace(/\D/g, '')
   if (!digits) return
   const referral = m.referral || null
+  const metaSource = referral ? (await campaignForAd(env.DB, referral)) || LEAD_META : null
   const existing = await findBookingByPhone(env.DB, digits)
 
   if (existing) {
@@ -246,19 +259,19 @@ async function linkOrCreateLead(env, m, name, waRowId, stats) {
       await env.DB.prepare(
         `UPDATE bookings SET lead_source = ?1,
            extra = json_patch(COALESCE(extra,'{}'), ?2) WHERE id = ?3`
-      ).bind(LEAD_META, JSON.stringify({ wa: { referral } }), existing.id).run()
+      ).bind(metaSource, JSON.stringify({ wa: { referral } }), existing.id).run()
     }
     return
   }
 
   const text = m.type === 'text' ? (m.text?.body || '') : ''
   const { meta } = await env.DB.prepare(
-    `INSERT INTO bookings (name, phone, lead_source, source, notes, extra)
-     VALUES (?1, ?2, ?3, 'whatsapp', ?4, ?5)`
+    `INSERT INTO bookings (name, phone, lead_source, source, notes, extra, added_at)
+     VALUES (?1, ?2, ?3, 'whatsapp', ?4, ?5, date('now'))`
   ).bind(
     name || null,
     localPhone(digits),
-    referral ? LEAD_META : LEAD_WA,
+    metaSource || LEAD_WA,
     text ? text.slice(0, 300) : null,
     JSON.stringify({ wa: { first_wamid: m.id || null, referral: referral || undefined } })
   ).run()

@@ -56,8 +56,8 @@ export async function onRequestPost({ request, env }) {
   let id
   try {
     const { meta } = await env.DB.prepare(
-      `INSERT INTO bookings (name, phone, event_date, occasion, venue, lang, lead_source, source)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'website')`
+      `INSERT INTO bookings (name, phone, event_date, occasion, venue, lang, lead_source, source, added_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'website', date('now'))`
     )
       .bind(b.name, b.phone, b.event_date || null, b.occasion || null, b.location || null, b.lang || null, leadSource)
       .run()

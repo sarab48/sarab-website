@@ -6,11 +6,14 @@ import { normalizeCity } from '../../../shared/intel.js'
 
 // Fields the office may write. Numbers are coerced; anything else is text.
 const WRITABLE = [
-  'booked_at', 'event_date', 'occasion', 'first_name', 'last_name', 'name', 'phone',
+  'booked_at', 'added_at', 'event_date', 'occasion', 'first_name', 'last_name', 'name', 'phone',
   'email', 'city', 'region', 'venue', 'start_time', 'end_time', 'hours', 'guests',
   'package', 'price', 'deposit', 'remaining', 'payment_status', 'arrival_time',
   'lead_source', 'interest', 'callback', 'notes', 'status',
 ]
+
+// Statuses that mean "actually booked" — reaching one of them stamps booked_at.
+export const BOOKED_STATUSES = ['مؤكد', 'دفع العربون', 'مكتمل']
 const NUMERIC = new Set(['hours', 'price', 'deposit', 'remaining'])
 
 export function cleanValue(key, v) {
@@ -146,6 +149,8 @@ export async function onRequestPost({ request, env }) {
   }
   if (!row.name && !row.phone) return Response.json({ ok: false, error: 'missing-fields' }, { status: 400 })
   row.status ||= 'استفسار'
+  row.added_at ||= new Date().toISOString().slice(0, 10)
+  if (!row.booked_at && BOOKED_STATUSES.includes(row.status)) row.booked_at = row.added_at
 
   // Next SARAB-NNN, continuing the workbook numbering.
   const { results } = await env.DB.prepare(
