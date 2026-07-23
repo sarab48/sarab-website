@@ -55,6 +55,21 @@ results.history = await (await post(AUTH, wrap('history', {
   ] }] }],
 }))).json()
 
+// --- 4b. history sync's echo chunks: field "history" but value.message_echoes
+//         (the shape Meta actually sent live on 2026-07-23) ---
+results.histEcho = await (await post(AUTH, wrap('history', {
+  messaging_product: 'whatsapp', metadata: meta,
+  message_echoes: [{ from: '972544997768', to: HIST_PHONE, id: 'wamid.OLDECHO1', timestamp: String(NOW - 4_980_000), type: 'text', text: { body: 'تمام، بنكون عندكم' } }],
+}))).json()
+
+// --- 4c. history sync's inbound chunks: field "history" but value.messages
+//         (third real Meta shape, seen live 2026-07-23) → stored, NO auto booking ---
+results.histIn = await (await post(AUTH, wrap('history', {
+  messaging_product: 'whatsapp', metadata: meta,
+  messages: [{ from: HIST_PHONE, id: 'wamid.OLDIN3', timestamp: String(NOW - 4_970_000), type: 'image',
+    image: { mime_type: 'image/jpeg', id: '926', url: 'https://lookaside.example/x' } }],
+}))).json()
+
 // --- 5. contact-name sync + unknown field → raw log ---
 results.stateSync = await (await post(AUTH, wrap('smb_app_state_sync', {
   messaging_product: 'whatsapp', metadata: meta,

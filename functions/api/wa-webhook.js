@@ -99,39 +99,53 @@ export async function onRequestPost({ request, env }) {
   return json({ ok: true, ...stats })
 }
 
+// Shape-driven, not field-driven: Meta reuses value shapes across fields — the history
+// sync delivers the owner's sent messages as value.message_echoes under field "history"
+// (seen live 2026-07-23), not inside history[].threads. Whatever isn't recognized by
+// shape is raw-logged.
 async function handleChange(env, change, stats) {
   const field = change.field || ''
   const value = change.value || {}
   const bizDigits = String(value.metadata?.display_phone_number || '').replace(/\D/g, '')
+  const origin = field === 'history' ? 'history' : 'live'
+  let handled = false
 
-  if (field === 'messages' && Array.isArray(value.messages)) {
+  if (Array.isArray(value.messages)) {
+    handled = true
     // Profile names ride alongside in value.contacts, keyed by wa_id.
     const names = {}
     for (const c of value.contacts || []) if (c.wa_id) names[c.wa_id] = c.profile?.name || null
     for (const m of value.messages) {
+      // The history sync also delivers received messages in this same shape (field
+      // "history", seen live 2026-07-23) — store them, but only genuinely live
+      // inbound messages may auto-create/link leads.
+      const fromDigits = String(m.from || '').replace(/\D/g, '')
+      const out = bizDigits && fromDigits === bizDigits
       const stored = await storeMessage(env, m, {
-        direction: 'in', origin: 'live', phone: m.from, name: names[m.from] || null,
+        direction: out ? 'out' : 'in',
+        origin,
+        phone: out ? (m.to || null) : m.from,
+        name: names[m.from] || null,
       })
       if (stored) {
         stats.stored++
-        await linkOrCreateLead(env, m, names[m.from] || null, stored.rowId, stats)
+        if (origin === 'live' && !out) await linkOrCreateLead(env, m, names[m.from] || null, stored.rowId, stats)
       }
     }
-    return
   }
 
-  if ((field === 'smb_message_echoes' || field === 'message_echoes')) {
-    const echoes = value.message_echoes || value.messages || []
-    for (const m of echoes) {
+  if (Array.isArray(value.message_echoes)) {
+    handled = true
+    for (const m of value.message_echoes) {
       const stored = await storeMessage(env, m, {
-        direction: 'out', origin: 'live', phone: m.to || null, name: null,
+        direction: 'out', origin, phone: m.to || null, name: null,
       })
       if (stored) stats.stored++
     }
-    return
   }
 
-  if (field === 'history' && Array.isArray(value.history)) {
+  if (Array.isArray(value.history)) {
+    handled = true
     for (const chunk of value.history) {
       for (const thread of chunk.threads || []) {
         const threadPhone = String(thread.id || '').replace(/\D/g, '') || null
@@ -148,10 +162,10 @@ async function handleChange(env, change, stats) {
         }
       }
     }
-    return
   }
 
-  if (field === 'smb_app_state_sync' && Array.isArray(value.state_sync)) {
+  if (Array.isArray(value.state_sync)) {
+    handled = true
     for (const s of value.state_sync) {
       if (s.type !== 'contact' || !s.contact) continue
       const phone = String(s.contact.phone_number || '').replace(/\D/g, '')
@@ -163,14 +177,15 @@ async function handleChange(env, change, stats) {
       ).bind(phone, name || null).run()
       stats.contacts++
     }
-    return
   }
 
   // Statuses (delivered/read receipts) carry nothing the owner needs — drop quietly.
-  if (field === 'messages' && Array.isArray(value.statuses) && !value.messages) return
+  if (Array.isArray(value.statuses)) handled = true
 
-  await logRaw(env, change)
-  stats.logged++
+  if (!handled) {
+    await logRaw(env, change)
+    stats.logged++
+  }
 }
 
 // One message → one wa_messages row. Returns null when wamid was already seen
