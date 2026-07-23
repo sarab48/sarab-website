@@ -40,6 +40,18 @@ results.live2 = await (await post(AUTH, wrap('messages', {
   messages: [{ from: LEAD_PHONE, id: 'wamid.TEST2', timestamp: String(NOW + 60), type: 'text', text: { body: 'التاريخ 2026-09-10' } }],
 }))).json()
 
+// --- 2b. live "unsupported" event (status reaction / deleted message, Meta 131060)
+//         → stored in the log, but NO auto booking ---
+const UNSUP_PHONE = '972501119900'
+results.unsupported = await (await post(AUTH, wrap('messages', {
+  messaging_product: 'whatsapp', metadata: meta,
+  contacts: [{ profile: { name: 'ردة فعل ستوري' }, wa_id: UNSUP_PHONE }],
+  messages: [{ from: UNSUP_PHONE, id: 'wamid.UNSUP1', timestamp: String(NOW + 90), type: 'unsupported',
+    errors: [{ code: 131060, title: 'This message is unavailable.' }], unsupported: { type: 'unknown' } }],
+}))).json()
+const bkU = await (await fetch(BASE + '/office/api/bookings?q=0501119900')).json()
+results.unsupportedNoLead = results.unsupported.stored === 1 && results.unsupported.leads === 0 && bkU.rows.length === 0
+
 // --- 3. owner's reply echo ---
 results.echo = await (await post(AUTH, wrap('smb_message_echoes', {
   messaging_product: 'whatsapp', metadata: meta,

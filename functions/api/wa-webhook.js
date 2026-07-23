@@ -129,7 +129,10 @@ async function handleChange(env, change, stats) {
       })
       if (stored) {
         stats.stored++
-        if (origin === 'live' && !out) await linkOrCreateLead(env, m, names[m.from] || null, stored.rowId, stats)
+        // "unsupported" events (status reactions, instantly-deleted messages — Meta
+        // error 131060) are kept in the log but are not real contact: no auto-lead.
+        if (origin === 'live' && !out && m.type !== 'unsupported')
+          await linkOrCreateLead(env, m, names[m.from] || null, stored.rowId, stats)
       }
     }
   }
