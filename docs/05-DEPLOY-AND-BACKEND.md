@@ -414,3 +414,50 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
   1800 → joined that tier (no new tier); no-price city not added; drawer intel then
   offers اعتماد السعر 3,100 for the next client; `_vcampaign.mjs` re-run green; zero
   console errors. Local-only test data, cleaned up.
+
+### 2026-07-23 — WhatsApp Cloud API ingestion: every message lands in D1 automatically
+- **Goal (owner)**: stop losing WhatsApp leads from Meta click-to-WhatsApp campaigns —
+  every message auto-recorded, new numbers auto-become استفسار bookings, no manual copying.
+- **Path chosen**: WhatsApp **coexistence** (Meta, GA since 2025) — the number stays on
+  the owner's phone app exactly as today; the Cloud API additionally delivers every
+  message to our webhook. Coexistence onboarding runs through a provider's Embedded
+  Signup (Meta-direct requires Tech Provider verification + app review — weeks); the
+  webhook is provider-agnostic so any Meta-format forwarder works (360dialog, Dualhook,
+  or Meta-direct later). Sync on onboarding: up to 6 months of 1:1 chat history
+  (media >14 days and groups excluded) via `history` webhooks + contact names via
+  `smb_app_state_sync`.
+- **`functions/api/wa-webhook.js`**: GET = Meta hub.challenge handshake; POST auth =
+  `?token=` (secret `WA_WEBHOOK_TOKEN`, generated, also at
+  `~/.secrets/sarab-wa-webhook-token`) OR X-Hub-Signature-256 HMAC (`WA_APP_SECRET`,
+  optional, for Meta-direct). Handles `messages` (live, incl. CTWA `referral` with
+  ctwa_clid/ad id/headline), `smb_message_echoes` (owner's phone replies),
+  `history` (back-sync), `smb_app_state_sync` (address-book names); anything
+  unrecognized is kept verbatim as a `log` row — nothing dropped, always 200 once
+  authorized (Meta disables failing webhooks). Dedupe by `wamid` UNIQUE.
+- **Auto-lead rule**: live inbound from unknown number → new استفسار booking
+  (source `whatsapp`, lead_source «إعلان ممول (Meta)» when the message carries an ad
+  referral else «واتساب», profile name, local 05x phone, first message in notes,
+  referral JSON in extra.wa). Known number → message linked to its booking; empty
+  lead_source gets filled when a referral proves Meta. **History never auto-creates
+  bookings** (old chats include non-leads) — the واتساب tab has أضف كاستفسار per contact.
+- **Schema** (`db/migrations/2026-07-23-whatsapp.sql`, additive only): `wa_messages`
+  (wamid UNIQUE, ts, direction in/out/log, origin live/history, phone, name, type,
+  body, referral JSON, booking_id, raw JSON) + `wa_contacts` (phone PK, name).
+- **Office واتساب tab** (`/office/api/whatsapp`): KPIs (contacts / messages / from-ads /
+  7-day inbound / auto-created leads), contact table (name, wa.me link, count, last
+  message, إعلان ميتا chip with ad headline in the title, first inbound snippet,
+  booking chip or أضف كاستفسار), click a name → full conversation view (أرشيف mark on
+  history rows). POST `to-booking` dedupes against existing bookings by last-9-digits
+  phone match before creating.
+- Verified headless (`_vwa.mjs`, port 8792): handshake echo, bad-token 403, unauthed
+  POST 403, live CTWA message → booking with Meta source + notes, wamid retry fully
+  deduped, second message no duplicate booking, echo stored `out`, history stored
+  without bookings, state_sync names history contacts, unknown field raw-logged,
+  office summary + UI KPIs/chips/conversation, history contact → booking via button,
+  zero console errors. Local-only test data, bookings cleaned.
+- **Deploy note**: remote migration + `wrangler pages secret put WA_WEBHOOK_TOKEN` (and
+  re-put EMAIL_API_TOKEN — the known redeploy gotcha) + `pages deploy` were
+  classifier-blocked in the autonomous session — run with the owner present.
+  Meta-side onboarding checklist lives in the session handoff (provider signup →
+  coexistence QR scan from the phone app → opt IN to chat-history share → webhook URL
+  `https://sarabaibooth.com/api/wa-webhook?token=<value of ~/.secrets/sarab-wa-webhook-token>`).

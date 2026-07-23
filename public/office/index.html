@@ -228,6 +228,7 @@
 <nav class="tabs" id="tabs">
   <button data-tab="bookings" class="on">الحجوزات</button>
   <button data-tab="callback">إعادة الاتصال</button>
+  <button data-tab="whatsapp">واتساب</button>
   <button data-tab="finance">المالية</button>
   <button data-tab="insights">التحليلات</button>
   <button data-tab="inventory">المخزون</button>
@@ -270,6 +271,7 @@
   <div class="pricing" id="inventory" style="display:none"></div>
   <div class="pricing" id="visitors" style="display:none"></div>
   <div class="pricing" id="capi" style="display:none"></div>
+  <div class="pricing" id="whatsapp" style="display:none"></div>
 </main>
 
 <div class="scrim" id="scrim"></div>
@@ -832,6 +834,77 @@ function renderVisitors() {
   $('#statDays').onchange = (e) => loadVisitors(Number(e.target.value)).catch(() => {});
 }
 
+// ---------- WhatsApp (Cloud API feed → wa_messages) ----------
+
+const waLocal = (d) => (String(d || '').startsWith('972') ? '0' + String(d).slice(-9) : String(d || ''));
+const waWhen = (ts) => (ts ? ts.slice(0, 16).replace('T', ' ') : '—');
+
+let WA = null;
+async function loadWa() {
+  try {
+    WA = await api('/office/api/whatsapp');
+    renderWa();
+  } catch (e) {
+    $('#whatsapp').innerHTML = '<div class="empty">تعذّر تحميل واتساب — حدّث الصفحة</div>';
+    throw e;
+  }
+}
+function renderWa() {
+  const k = WA.kpi;
+  const rows = WA.contacts;
+  const adInfo = (r) => {
+    if (!r.from_ad) return '—';
+    let t = 'إعلان ميتا';
+    try { const ref = JSON.parse(r.referral || '{}'); if (ref.headline) t = ref.headline; } catch {}
+    return `<span class="chip" style="background:rgba(201,162,78,.16);color:#C9A24E" title="${esc(t)}">إعلان ميتا</span>`;
+  };
+  $('#whatsapp').innerHTML = `
+    <section class="kpis" style="padding:0">
+      <div class="kpi gold"><b>${k.contacts}</b><span>جهات تواصل</span></div>
+      <div class="kpi"><b>${k.messages}</b><span>رسائل محفوظة</span></div>
+      <div class="kpi gold"><b>${k.ad_contacts}</b><span>وصلوا من إعلانات ميتا</span></div>
+      <div class="kpi"><b>${k.in_7d}</b><span>رسائل واردة — آخر 7 أيام</span></div>
+      <div class="kpi"><b>${k.auto_leads}</b><span>استفسارات أُنشئت تلقائياً</span></div>
+    </section>
+    ${rows.length ? `<div class="tablebox"><table>
+      <thead><tr><th>الاسم</th><th>الهاتف</th><th>الرسائل</th><th>آخر رسالة</th><th>المصدر</th><th>أول رسالة واردة</th><th>الحجز</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr>
+        <td><a href="#" class="waOpen" data-phone="${esc(r.phone)}" data-name="${esc(r.name || '')}"><b>${esc(r.name || waLocal(r.phone))}</b></a></td>
+        <td dir="ltr"><a href="https://wa.me/${esc(r.phone)}" target="_blank" rel="noopener">${esc(waLocal(r.phone))}</a></td>
+        <td class="num">${r.n}</td>
+        <td>${waWhen(r.last_ts)}</td>
+        <td>${adInfo(r)}</td>
+        <td class="muted">${esc((r.first_msg || '').slice(0, 40))}</td>
+        <td>${r.booking_id
+          ? `<span class="chip">${esc(r.booking_no || '#' + r.booking_id)}${r.status ? ' · ' + esc(r.status) : ''}</span>`
+          : `<button class="btn btn--ghost btn--sm waAdd" data-phone="${esc(r.phone)}">أضف كاستفسار</button>`}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <div id="waMsgs"></div>`
+    : `<div class="empty">لا رسائل بعد — بعد ربط رقم الواتساب بواجهة Cloud API ستظهر هنا كل رسالة تصلك،
+       وكل رقم جديد يراسلك يُضاف تلقائياً كاستفسار في الحجوزات (مع اسم الحملة عندما يصل من إعلان).</div>`}`;
+
+  $$('.waAdd', $('#whatsapp')).forEach((b) => b.onclick = async () => {
+    try {
+      const res = await api('/office/api/whatsapp', { method: 'POST', body: JSON.stringify({ action: 'to-booking', phone: b.dataset.phone }) });
+      toast(res.existing ? 'مرتبط بحجز موجود ✓' : 'أُضيف كاستفسار ✓');
+      await loadWa();
+    } catch (e) { if (e.message !== 'unauthorized') toast('لم يُضف', true); }
+  });
+  $$('.waOpen', $('#whatsapp')).forEach((a) => a.onclick = async (e) => {
+    e.preventDefault();
+    const { messages } = await api('/office/api/whatsapp?phone=' + a.dataset.phone);
+    $('#waMsgs').innerHTML = `<div class="tablebox" style="margin-top:.8rem">
+      <b style="display:block;padding:.5rem .8rem">محادثة ${esc(a.dataset.name || waLocal(a.dataset.phone))} <span class="muted" dir="ltr">${esc(waLocal(a.dataset.phone))}</span></b>
+      ${messages.map((m) => `<div style="padding:.35rem .8rem;border-top:1px solid var(--line);${m.direction === 'out' ? 'opacity:.75' : ''}">
+        <span class="muted" style="font-size:.72rem">${waWhen(m.ts)} · ${m.direction === 'out' ? 'أنا' : 'العميل'}${m.origin === 'history' ? ' · أرشيف' : ''}</span><br>
+        ${m.body ? esc(m.body) : `<i class="muted">[${esc(m.type)}]</i>`}
+      </div>`).join('') || '<div class="empty">لا رسائل</div>'}
+    </div>`;
+    $('#waMsgs').scrollIntoView({ behavior: 'smooth' });
+  });
+}
+
 const intlPhone = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.startsWith('0') ? '972' + d.slice(1) : d; };
 // The base Meta source plus every campaign the owner added in the CAPI tab — a booking
 // carrying ANY of these in مصدر العميل is a Meta conversion.
@@ -1275,20 +1348,21 @@ $('#upcoming').onchange = (e) => { clearDateCheck(false); state.filters.upcoming
 $('#nopast').onchange = (e) => { clearDateCheck(false); state.filters.nopast = e.target.checked; loadRows(); };
 $('#order').onchange = (e) => { clearDateCheck(false); state.filters.order = e.target.value; loadRows(); };
 
-const PANES = { bookings: '#gridbox', callback: '#gridbox', cities: '#pricing', finance: '#finance', insights: '#insights', inventory: '#inventory', visitors: '#visitors', capi: '#capi' };
+const PANES = { bookings: '#gridbox', callback: '#gridbox', cities: '#pricing', finance: '#finance', insights: '#insights', inventory: '#inventory', visitors: '#visitors', capi: '#capi', whatsapp: '#whatsapp' };
 $$('#tabs button').forEach((b) => b.onclick = () => {
   $$('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
   state.tab = b.dataset.tab;
   const pane = PANES[state.tab];
   $('#filters').style.display = pane === '#gridbox' ? '' : 'none';
   $('#dateVerdict').style.display = 'none';
-  for (const sel of ['#gridbox', '#pricing', '#finance', '#insights', '#inventory', '#visitors', '#capi']) $(sel).style.display = sel === pane ? '' : 'none';
+  for (const sel of ['#gridbox', '#pricing', '#finance', '#insights', '#inventory', '#visitors', '#capi', '#whatsapp']) $(sel).style.display = sel === pane ? '' : 'none';
   if (state.tab === 'cities') loadPricing().catch(() => {});
   else if (state.tab === 'finance') loadFinance().catch(() => {});
   else if (state.tab === 'insights') loadInsights().catch(() => {});
   else if (state.tab === 'inventory') loadInventory().catch(() => {});
   else if (state.tab === 'visitors') loadVisitors().catch(() => {});
   else if (state.tab === 'capi') loadCapi().catch(() => {});
+  else if (state.tab === 'whatsapp') loadWa().catch(() => {});
   else loadRows();
 });
 
