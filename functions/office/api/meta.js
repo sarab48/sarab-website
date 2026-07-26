@@ -4,8 +4,24 @@
   is signed in. Auth handled by ../_middleware.js.
 */
 
+// Worker names already assigned to an event, one entry per person: a booking's `staff`
+// may hold several names ("أحمد، سارة"), so split the stored strings apart before
+// offering them back as the الطاقم datalist.
+export function staffNames(rows) {
+  const seen = new Map()   // lowercased key → first spelling seen, so the list has no near-dupes
+  for (const r of rows) {
+    for (const part of String(r.s || '').split(/[,،;/+]/)) {
+      const name = part.trim()
+      if (!name) continue
+      const key = name.toLowerCase()
+      if (!seen.has(key)) seen.set(key, name)
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b, 'ar'))
+}
+
 export async function onRequestGet({ env, data }) {
-  const [options, cities, counts, kpi, months, venues, occasions] = await env.DB.batch([
+  const [options, cities, counts, kpi, months, venues, occasions, staff] = await env.DB.batch([
     env.DB.prepare('SELECT kind, value, pos FROM options ORDER BY kind, pos'),
     env.DB.prepare(`SELECT c.id, c.name, p.price FROM cities c
                     JOIN price_tiers p ON p.id = c.tier_id ORDER BY p.price, c.name`),
@@ -26,6 +42,9 @@ export async function onRequestGet({ env, data }) {
     env.DB.prepare(`SELECT occasion AS o, COUNT(*) AS n FROM bookings
                     WHERE occasion IS NOT NULL AND occasion != ''
                     GROUP BY occasion ORDER BY n DESC, o`),
+    // workers already sent to an event — offered for reuse in the الطاقم field
+    env.DB.prepare(`SELECT DISTINCT staff AS s FROM bookings
+                    WHERE staff IS NOT NULL AND staff != ''`),
   ])
 
   const opts = {}
@@ -59,5 +78,6 @@ export async function onRequestGet({ env, data }) {
     kpi: kpi.results[0],
     months: months.results.map((r) => r.m),
     venues: venues.results.map((r) => r.v),
+    staff: staffNames(staff.results),
   })
 }

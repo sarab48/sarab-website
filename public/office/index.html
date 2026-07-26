@@ -261,7 +261,7 @@
   <div class="tablebox" id="gridbox"><table id="grid">
     <thead><tr>
       <th>الرقم</th><th>الاسم</th><th>الهاتف</th><th>تاريخ المناسبة</th><th>النوع</th>
-      <th>المدينة</th><th>القاعة</th><th>الحالة</th><th>الدفع</th><th>المتبقي</th>
+      <th>المدينة</th><th>القاعة</th><th>الحالة</th><th>الدفع</th><th>المتبقي</th><th>الطاقم</th>
     </tr></thead>
     <tbody></tbody>
   </table></div>
@@ -330,6 +330,17 @@ const waLink = (phone) => {
   return 'https://wa.me/' + (d.startsWith('0') ? '972' + d.slice(1) : d);
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// الطاقم: one worker per separator (، , ; / +) — how many names were written.
+const staffCount = (s) => String(s ?? '').split(/[,،;/+]/).filter((p) => p.trim()).length;
+// Grid cell: the worker(s), with ×n whenever the recorded count says more than one.
+const staffCell = (r) => {
+  const names = String(r.staff || '').trim();
+  const n = Number(r.staff_count);
+  const times = Number.isFinite(n) && n > 1 ? ` <span class="muted">×${n}</span>` : '';
+  if (names) return esc(names) + times;
+  return Number.isFinite(n) && n > 0 ? `<span class="muted">${n} عمال</span>` : '—';
+};
 
 // The fullest name we can show. The office edits first_name/last_name but the legacy
 // `name` field (set once from the website form) is never re-synced — so a record can
@@ -428,7 +439,7 @@ function renderRows() {
     $('#dateVerdict').style.display = 'none';
   }
   if (!state.rows.length) {
-    tb.innerHTML = `<tr><td colspan="10"><div class="empty">لا نتائج</div></td></tr>`;
+    tb.innerHTML = `<tr><td colspan="11"><div class="empty">لا نتائج</div></td></tr>`;
   } else {
     tb.innerHTML = state.rows.map((r) => {
       const wa = waLink(r.phone);
@@ -449,6 +460,7 @@ function renderRows() {
         <td data-l="الحالة">${badge(r.status)}</td>
         <td data-l="الدفع">${esc(r.payment_status || '—')}</td>
         <td data-l="المتبقي" class="num">${money(r.remaining)}</td>
+        <td data-l="الطاقم">${staffCell(r)}</td>
       </tr>`;
     }).join('');
     $$('tr[data-id]', tb).forEach((tr) => tr.onclick = () => openDrawer(Number(tr.dataset.id)));
@@ -1159,8 +1171,11 @@ const F = [
   ['price', 'السعر الكامل', 'number'], ['deposit', 'العربون المدفوع', 'number'],
   ['remaining', 'المتبقي', 'number'], ['payment_status', 'حالة الدفع', 'select:payment_status'],
   ['lead_source', 'مصدر العميل', 'select:lead_source'], ['interest', 'مستوى الاهتمام', 'select:interest'],
-  ['region', 'المنطقة'], ['arrival_time', 'وقت وصولي'],
-  ['package', 'الباقة / النمط'], ['email', 'البريد الإلكتروني'],
+  ['region', 'المنطقة'],
+  // the two طاقم fields sit on one row together — the names and how many people they are
+  ['staff', 'الطاقم — العامل في المناسبة', 'list:staff'], ['staff_count', 'عدد العمال', 'number'],
+  ['arrival_time', 'وقت وصولي'], ['package', 'الباقة / النمط'],
+  ['email', 'البريد الإلكتروني'],
   ['callback', 'إعادة الاتصال؟', 'check'],
   ['notes', 'ملاحظات', 'textarea'],
 ];
@@ -1184,6 +1199,7 @@ function fieldHtml([key, label, kind]) {
     const name = kind.slice(5);
     const opts = name === 'cities' ? (state.meta.cities || []).map((c) => c.name)
       : name === 'venues' ? (state.meta.venues || [])
+      : name === 'staff' ? (state.meta.staff || [])
       : (state.meta.options[name] || []);
     input = `<input id="f_${key}" list="dl_${name}"><datalist id="dl_${name}">${opts.map((o) => `<option value="${esc(o)}">`).join('')}</datalist>`;
   } else input = `<input id="f_${key}">`;
@@ -1271,6 +1287,7 @@ function openDrawer(id) {
   const row = id ? state.rows.find((r) => r.id === id) : null;
   state.editing = row ? row.id : null;
   state.remainTouched = false;
+  state.staffTouched = false;
   $('#dTitle').textContent = row ? `${row.booking_no || '#' + row.id} — ${fullName(row)}` : 'حجز جديد';
   $('#dBody').innerHTML = '<div class="field full intel" id="intel" style="display:none"></div>' + F.map(fieldHtml).join('');
   for (const [key,, kind] of F) {
@@ -1306,6 +1323,13 @@ function openDrawer(id) {
     if (state.remainTouched) return;
     const p = parseFloat($('#f_price').value), d = parseFloat($('#f_deposit').value) || 0;
     if (Number.isFinite(p)) $('#f_remaining').value = p - d;
+  });
+  // عدد العمال follows the names written in الطاقم (one per separator) — same idiom as
+  // المتبقي following السعر − العربون: a manual edit of the count wins from then on.
+  $('#f_staff_count').addEventListener('input', () => state.staffTouched = true);
+  $('#f_staff').addEventListener('input', () => {
+    if (state.staffTouched) return;
+    $('#f_staff_count').value = staffCount($('#f_staff').value) || '';
   });
   // live intel: availability for the chosen date + tier price for the city
   const intelDeb = (() => { let h; return () => { clearTimeout(h); h = setTimeout(loadIntel, 400); }; })();
@@ -1365,7 +1389,8 @@ $('#newBtn').onclick = () => openDrawer(null);
 $('#refreshBtn').onclick = () => Promise.all([loadMeta(), loadRows()]).then(() => toast('تم التحديث ✓'));
 $('#csvBtn').onclick = () => {
   const cols = ['booking_no','name','first_name','last_name','phone','event_date','occasion','city','region','venue',
-    'status','payment_status','price','deposit','remaining','lead_source','interest','callback','notes','source','lang','created_at'];
+    'status','payment_status','price','deposit','remaining','staff','staff_count',
+    'lead_source','interest','callback','notes','source','lang','created_at'];
   const csv = [cols.join(',')]
     .concat(state.rows.map((r) => cols.map((c) => `"${String(r[c] ?? '').replace(/"/g, '""')}"`).join(',')))
     .join('\n');

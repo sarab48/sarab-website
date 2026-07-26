@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   remaining      REAL,                 -- المتبقي
   payment_status TEXT,                 -- حالة الدفع
   arrival_time   TEXT,                 -- وقت وصولي
+  staff          TEXT,                 -- الطاقم — اسم العامل/العمال في المناسبة (2026-07-26)
+  staff_count    INTEGER,              -- عدد العمال
   lead_source    TEXT,                 -- مصدر العميل
   interest       TEXT,                 -- مستوى اهتمام العميل
   callback       INTEGER DEFAULT 0,    -- إعادة الاتصال؟

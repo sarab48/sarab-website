@@ -527,3 +527,31 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
   (normalized bookings.phone LIKE %last-9-digits, latest booking wins), so any typing
   style matches and the case can't recur; production wa_messages backfilled
   (152 rows → 70 linked contacts, 0 matching-unlinked left). Bookings table untouched.
+
+### 2026-07-26 — طاقم المناسبة: who works the event and how many
+- **Owner request**: every booking now records the worker(s) going to the event and the
+  number of workers. Two additive columns on `bookings` — `staff` (اسم العامل / أسماء
+  العمال, free text) and `staff_count` (عدد العمال, whole number) — migration
+  `db/migrations/2026-07-26-staff.sql`. Both writable through the office booking API
+  (POST + PATCH); `staff_count` is coerced to a non-negative integer (`3.4` → `3`,
+  empty → NULL), so a stray keystroke can't store a decimal head-count.
+- **Drawer**: the two fields sit side by side under المنطقة. عدد العمال follows the names
+  written in الطاقم — one per separator (`، , ; / +`) — until it is typed by hand, after
+  which the manual number wins for the rest of that drawer session (same idiom as
+  المتبقي following السعر − العربون). The names already used come back as a datalist:
+  `meta.staff` splits stored strings apart so each worker is offered individually
+  («ندى / رامي» → ندى, رامي), deduped case-insensitively.
+- **Grid**: new الطاقم column at the end — worker name plus `×n` when the count is more
+  than one, or `n عمال` when only a count was recorded. Deliberately last so the phone
+  layout's `nth-child` rules (name+date / city+status) are untouched; the column is
+  hidden ≤720px and the drawer carries it there. CSV export includes both fields.
+- **Remote migration** run with a fresh backup first (`ops/db-backups/2026-07-26-pre-staff/`):
+  124/124 rows present afterwards, **0 pre-existing values changed**, both columns NULL
+  everywhere (nothing invented). Pages secrets verified intact after the deploy.
+- Tests: new `_vstaff.mjs` (API round-trip, integer coercion, datalist splitting, grid
+  column, drawer auto-count + manual override, phone layout unchanged) — green; whole
+  existing suite re-run green (`_voffice`, `_venhance`, `_vcity`, `_vcampaign`, `_vwa`).
+- Gotcha for future sessions: `_vwa.mjs` deliberately leaves its `wa_messages` rows in the
+  local DB, and the webhook dedupes on `wamid` — so a **second run crashes** at the
+  added_at assertion (no lead created). Clear the local wa tables before re-running:
+  `wrangler d1 execute sarab-bookings --local --command "DELETE FROM wa_messages; DELETE FROM wa_contacts; DELETE FROM bookings WHERE source='whatsapp'"`.

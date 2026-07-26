@@ -9,17 +9,21 @@ const WRITABLE = [
   'booked_at', 'added_at', 'event_date', 'occasion', 'first_name', 'last_name', 'name', 'phone',
   'email', 'city', 'region', 'venue', 'start_time', 'end_time', 'hours', 'guests',
   'package', 'price', 'deposit', 'remaining', 'payment_status', 'arrival_time',
-  'lead_source', 'interest', 'callback', 'notes', 'status',
+  'staff', 'staff_count', 'lead_source', 'interest', 'callback', 'notes', 'status',
 ]
 
 // Statuses that mean "actually booked" — reaching one of them stamps booked_at.
 export const BOOKED_STATUSES = ['مؤكد', 'دفع العربون', 'مكتمل']
-const NUMERIC = new Set(['hours', 'price', 'deposit', 'remaining'])
+const NUMERIC = new Set(['hours', 'price', 'deposit', 'remaining', 'staff_count'])
 
 export function cleanValue(key, v) {
   if (v === undefined) return undefined
   if (v === null || v === '') return null
   if (key === 'callback') return v === true || v === 1 || v === '1' ? 1 : 0
+  if (key === 'staff_count') {
+    const n = Math.round(Number(v))
+    return Number.isFinite(n) && n >= 0 ? n : null
+  }
   if (NUMERIC.has(key)) {
     const n = Number(v)
     return Number.isFinite(n) ? n : null

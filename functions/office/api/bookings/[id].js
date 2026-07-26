@@ -10,7 +10,7 @@ const WRITABLE = [
   'booked_at', 'added_at', 'event_date', 'occasion', 'first_name', 'last_name', 'name', 'phone',
   'email', 'city', 'region', 'venue', 'start_time', 'end_time', 'hours', 'guests',
   'package', 'price', 'deposit', 'remaining', 'payment_status', 'arrival_time',
-  'lead_source', 'interest', 'callback', 'notes', 'status',
+  'staff', 'staff_count', 'lead_source', 'interest', 'callback', 'notes', 'status',
 ]
 
 export async function onRequestGet({ env, params }) {
