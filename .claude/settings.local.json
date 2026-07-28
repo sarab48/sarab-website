@@ -130,7 +130,27 @@
       "Bash(identify public/og-brand.jpg)",
       "Bash(awk '{print $3, $7}')",
       "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'OG share image: new brand-name logo \\(og-brand.jpg\\) *)",
-      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Mobile bookings: compact 2-line rows \\(name+date / city+status\\), ~10 per screen *)"
+      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm 'Mobile bookings: compact 2-line rows \\(name+date / city+status\\), ~10 per screen *)",
+      "Bash(echo \"started, pid $!\")",
+      "Bash(git --no-pager diff .claude/settings.local.json)",
+      "Bash(git --no-pager diff functions/office/api/bookings.js functions/office/api/bookings/[id].js public/office/index.html)",
+      "Bash(pkill -f \"wrangler pages dev\")",
+      "Bash(git -c user.name=SARAB -c user.email=sarabtech8@gmail.com commit -qm ' *)",
+      "Bash(git --no-pager log --oneline -1)",
+      "Bash(git --no-pager log --oneline -2)",
+      "Bash(git --no-pager status --short)",
+      "Bash(echo \"homepage: $\\(curl -s -o /dev/null -w '%{http_code}' https://sarabaibooth.com/\\)\")",
+      "Bash(echo \"office gate: $\\(curl -s -o /dev/null -w '%{http_code}' https://sarabaibooth.com/office/api/meta\\) \\(302 = sealed\\)\")",
+      "Bash(echo \"homepage: $\\(curl -s -o /dev/null -w '%{http_code}' https://sarabaibooth.com/\\) · office gate: $\\(curl -s -o /dev/null -w '%{http_code}' https://sarabaibooth.com/office/api/finance\\) \\(302=sealed\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(node --check \"/tmp/claude-1000/-home-admin9-HADDAD-TECH-PROJECTS-sarab-website/160a0581-a936-44c5-b10f-bce7e11038fd/scratchpad/office.js\")",
+      "Bash(node *)",
+      "Bash(echo \"apex:   $\\(curl -s -o /dev/null -w '%{http_code}' https://sarabaibooth.com/\\)\")",
+      "Bash(echo \"office: $\\(curl -s -o /dev/null -w '%{http_code}' https://sarabaibooth.com/office\\)  \\(302 = Access-protected, expected\\)\")",
+      "Bash(echo \"edit app \\(must be untouched\\): $\\(curl -s -o /dev/null -w '%{http_code}' https://edit.sarabaibooth.com/\\)\")",
+      "Bash(git commit *)",
+      "Bash(echo \"office: $\\(curl -s -o /dev/null -w '%{http_code}' https://sarabaibooth.com/office\\)  \\(302 Access, expected\\)\")",
+      "Bash(echo \"api:    $\\(curl -s -o /dev/null -w '%{http_code}' https://sarabaibooth.com/office/api/bookings?date=2026-09-09\\)  \\(403 Access without JWT, expected — filter reachable\\)\")"
     ]
   }
 }

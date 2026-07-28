@@ -31,10 +31,40 @@ export function cleanValue(key, v) {
   return String(v).trim().slice(0, 500) || null
 }
 
+// Next SARAB-NNN, continuing the workbook numbering.
+async function nextBookingNo(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT MAX(CAST(substr(booking_no, 7) AS INTEGER)) AS m FROM bookings WHERE booking_no LIKE 'SARAB-%'"
+  ).all()
+  return `SARAB-${String((results[0]?.m || 0) + 1).padStart(3, '0')}`
+}
+
+// Leads that arrive on their own (website form, WhatsApp) start as استفسار with no number —
+// numbering is for real bookings. The moment such a lead becomes one (مؤكد / دفع العربون /
+// مكتمل) it gets the next SARAB-NNN, so it carries an identity in the owner's system and can
+// be linked from the finance tables. Idempotent: an existing number is never changed. Retries
+// on the UNIQUE clash two concurrent saves could produce. Mutates `row` and returns it.
+export async function ensureBookingNo(env, row) {
+  if (!row || row.booking_no || !BOOKED_STATUSES.includes(row.status)) return row
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const no = await nextBookingNo(env)
+    try {
+      const { meta } = await env.DB.prepare(
+        'UPDATE bookings SET booking_no = ?1 WHERE id = ?2 AND booking_no IS NULL'
+      ).bind(no, row.id).run()
+      if (meta.changes) row.booking_no = no
+      return row
+    } catch { /* someone took that number between the read and the write — try the next one */ }
+  }
+  return row
+}
+
 // When a booking becomes مكتمل, make sure it has a row in the per-event P&L table
 // (أرباح ومصاريف المناسبات) seeded from the booking — so the owner only fills in the
 // costs. Idempotent: keyed on booking_no, so re-saving a completed booking (or one that
-// was already given a finance row / imported) never creates a duplicate.
+// was already given a finance row / imported) never creates a duplicate. Callers run
+// ensureBookingNo first: without a number there is nothing to key on and the event would
+// silently never reach the finance list.
 export async function ensureEventFinance(env, row) {
   if (!row || row.status !== 'مكتمل' || !row.booking_no) return
   const existing = await env.DB.prepare('SELECT id FROM event_finances WHERE booking_no = ?1')
@@ -156,12 +186,7 @@ export async function onRequestPost({ request, env }) {
   row.added_at ||= new Date().toISOString().slice(0, 10)
   if (!row.booked_at && BOOKED_STATUSES.includes(row.status)) row.booked_at = row.added_at
 
-  // Next SARAB-NNN, continuing the workbook numbering.
-  const { results } = await env.DB.prepare(
-    "SELECT MAX(CAST(substr(booking_no, 7) AS INTEGER)) AS m FROM bookings WHERE booking_no LIKE 'SARAB-%'"
-  ).all()
-  const next = (results[0]?.m || 0) + 1
-  row.booking_no = `SARAB-${String(next).padStart(3, '0')}`
+  row.booking_no = await nextBookingNo(env)
   row.source = 'office'
 
   const cols = Object.keys(row)

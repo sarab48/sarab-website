@@ -4,7 +4,7 @@
   normally stay as the ملغي status).
   Auth: ../../_middleware.js.
 */
-import { cleanValue, ensureEventFinance, ensureCityPrice, BOOKED_STATUSES } from '../bookings.js'
+import { cleanValue, ensureBookingNo, ensureEventFinance, ensureCityPrice, BOOKED_STATUSES } from '../bookings.js'
 
 const WRITABLE = [
   'booked_at', 'added_at', 'event_date', 'occasion', 'first_name', 'last_name', 'name', 'phone',
@@ -45,6 +45,9 @@ export async function onRequestPatch({ request, env, params }) {
   if (!meta.changes) return Response.json({ ok: false, error: 'not-found' }, { status: 404 })
 
   const row = await env.DB.prepare('SELECT * FROM bookings WHERE id = ?1').bind(Number(params.id)).first()
+  // A website/WhatsApp lead that just became a real booking gets its SARAB-NNN here — the
+  // finance row is keyed on it, so this must run first (idempotent, existing numbers kept).
+  await ensureBookingNo(env, row)
   // Newly completed booking → auto-seed its row in أرباح ومصاريف المناسبات (idempotent).
   await ensureEventFinance(env, row)
   // Unknown city + a price on the booking → auto-join the price list (idempotent).

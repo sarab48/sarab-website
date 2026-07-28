@@ -6,6 +6,7 @@
   actually received, not the demanded price).
   Auth: ../_middleware.js.
 */
+import { ensureBookingNo, ensureEventFinance } from './bookings.js'
 
 const EV_FIELDS = ['booking_no', 'event_date', 'city', 'client', 'price', 'paid', 'worker1',
   'worker2', 'hours_cost', 'transport', 'printing', 'other', 'tax_pct', 'tax_value']
@@ -25,7 +26,7 @@ const val = (k, v, nums) => {
 }
 
 async function payload(env) {
-  const [ev, gen, kpi, adv] = await env.DB.batch([
+  const [ev, gen, kpi, adv, miss] = await env.DB.batch([
     env.DB.prepare('SELECT * FROM event_finances ORDER BY (event_date IS NULL), event_date DESC, id DESC'),
     env.DB.prepare('SELECT * FROM general_expenses ORDER BY (date IS NULL), date DESC, id DESC'),
     env.DB.prepare(`SELECT
@@ -41,8 +42,26 @@ async function payload(env) {
                     FROM bookings
                     WHERE status IN ('مؤكد','دفع العربون') AND COALESCE(deposit, 0) > 0
                     ORDER BY (event_date IS NULL), event_date ASC, id ASC`),
+    // Completed events with no P&L row — normally none (one is seeded the moment a booking
+    // turns مكتمل), so anything here is a gap: an event the owner would otherwise be
+    // calculating without. A booking with no booking_no can't match a finance row at all,
+    // hence the NULL-safe comparison. Surfaced in the tab with a one-click add.
+    env.DB.prepare(`SELECT b.id, b.booking_no, b.event_date, b.city, b.name AS client,
+                           b.price, b.deposit, b.remaining
+                    FROM bookings b
+                    WHERE b.status = 'مكتمل'
+                      AND NOT EXISTS (SELECT 1 FROM event_finances f
+                                      WHERE f.booking_no IS NOT NULL AND f.booking_no = b.booking_no)
+                    ORDER BY (b.event_date IS NULL), b.event_date DESC, b.id DESC`),
   ])
-  return { ok: true, events: ev.results, general: gen.results, kpi: kpi.results[0], advances: adv.results }
+  return {
+    ok: true,
+    events: ev.results,
+    general: gen.results,
+    kpi: kpi.results[0],
+    advances: adv.results,
+    missing: miss.results,
+  }
 }
 
 async function recomputeEvent(env, id) {
@@ -60,6 +79,17 @@ export async function onRequestGet({ env }) {
 export async function onRequestPost({ request, env }) {
   let b
   try { b = await request.json() } catch { return bad('bad-json') }
+  // "أضف للمالية" on a completed booking the list is missing: seed the row straight from the
+  // booking, through the very same helpers the automatic path uses (numbering + idempotent
+  // insert), so a manual catch-up and an automatic seed can never disagree.
+  if (b.from_booking) {
+    const bk = await env.DB.prepare("SELECT * FROM bookings WHERE id = ?1 AND status = 'مكتمل'")
+      .bind(Number(b.from_booking)).first()
+    if (!bk) return bad('booking-not-found', 404)
+    await ensureBookingNo(env, bk)
+    await ensureEventFinance(env, bk)
+    return Response.json(await payload(env))
+  }
   const [fields, nums, table] = b.table === 'event'
     ? [EV_FIELDS, EV_NUM, 'event_finances']
     : b.table === 'general' ? [GEN_FIELDS, GEN_NUM, 'general_expenses'] : [null]

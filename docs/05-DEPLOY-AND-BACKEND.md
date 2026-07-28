@@ -555,3 +555,36 @@ Deploying via Wrangler needs a **Cloudflare API token**. Important:
   local DB, and the webhook dedupes on `wamid` — so a **second run crashes** at the
   added_at assertion (no lead created). Clear the local wa tables before re-running:
   `wrangler d1 execute sarab-bookings --local --command "DELETE FROM wa_messages; DELETE FROM wa_contacts; DELETE FROM bookings WHERE source='whatsapp'"`.
+
+### 2026-07-28 — completed events could silently miss the finance list (fixed + backfilled)
+
+The owner spotted it on a real client: **רודינה חלאילה** (سخنين, 28/07/2026, 850 ₪ paid in
+full) was marked **مكتمل** but never appeared in **الأرباح والمصاريف**, so it was missing from
+the profit calculation.
+
+- **Cause**: `ensureEventFinance` seeds the P&L row keyed on `booking_no` and bailed out on
+  `!row.booking_no`. Leads that arrive on their own — website form and واتساب — are created
+  **without** a number (numbering is for real bookings). Confirming such a lead never gave it
+  one, so the moment it turned مكتمل the seed silently did nothing. 56 of the 140 bookings
+  (3 website + 53 WhatsApp) were numberless; 8 of them had already become real bookings.
+- **Fix**: new `ensureBookingNo` in `functions/office/api/bookings.js` — a booking reaching
+  مؤكد / دفع العربون / مكتمل without a number gets the next `SARAB-NNN` (same counter as the
+  office "+ حجز جديد"; existing numbers never change; retries the UNIQUE clash two concurrent
+  saves could cause). The PATCH handler runs it **before** `ensureEventFinance`. The other 7
+  numberless real bookings pick their number up on their next save — no migration needed.
+- **Safety net**: `/office/api/finance` now returns `missing` — مكتمل bookings with no P&L row
+  — and the المالية tab shows them in a red banner above the table with an **«أضف للمالية»**
+  button per row. The button POSTs `{ from_booking: id }`, which the API serves through the
+  *same* two helpers as the automatic path, so a manual catch-up and an automatic seed can
+  never disagree. Zero rows in `missing` = nothing to see, banner hidden.
+- **Backfill** (`ops/db-backups/2026-07-28-pre-finance-backfill/` taken first): guarded,
+  insert-only SQL gave booking 112 the number `SARAB-088` and seeded its finance row
+  (price 850, paid 850, expenses 0, net 850 — costs for the owner to fill in). Diffed against
+  the backup: bookings 140 → 140 with **exactly one** field changed (`#112.booking_no`
+  null → SARAB-088), event_finances 10 → 11 with **one** row added, nothing deleted, nothing
+  else touched. All 11 مكتمل bookings now have a P&L row.
+- Tests: new `_vfinance.mjs` (port 8793) — numberless lead → مكتمل → numbered + seeded,
+  idempotent re-save, owner's hand-entered costs survive it, gap reported in `missing`, the
+  button closes it, non-completed bookings stay out (advances only), UI + no console errors.
+  Green, plus `_venhance`, `_voffice`, `_vdeposit`, `_vstaff`, `_vcity`, `_vcampaign` re-run
+  green. Pages secrets verified intact after the deploy.

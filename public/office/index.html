@@ -152,6 +152,15 @@
   }
   tfoot td:first-child{color:var(--gold)}
 
+  /* catch-up list for completed events missing from the P&L: on a phone keep the client,
+     the date, what was collected and the button — the rest would push the action into a
+     horizontal scroll nobody would find */
+  @media (max-width:720px){
+    #finmiss th:nth-child(1), #finmiss td:nth-child(1),
+    #finmiss th:nth-child(3), #finmiss td:nth-child(3),
+    #finmiss th:nth-child(5), #finmiss td:nth-child(5){display:none}
+  }
+
   /* quick date-availability check: a filter button that pops the calendar, a verdict
      banner, and any real booking on that date floated to the top and flagged red */
   .dc-wrap{position:relative; display:inline-flex}
@@ -622,6 +631,13 @@ async function loadFinance() { FIN = await api('/office/api/finance'); renderFin
 function renderFinance() {
   const k = FIN.kpi;
   const adv = FIN.advances || [];
+  // Completed events the P&L list doesn't hold yet — the owner would be calculating without them.
+  const miss = FIN.missing || [];
+  // Same rule the server seeds a row with: a completed event has collected its price minus any
+  // balance still outstanding; with no price recorded, fall back to the deposit we do know.
+  const collected = (m) => (m.price != null
+    ? Number(m.price) - (Number(m.remaining) || 0)
+    : Number(m.deposit) || 0);
   const advIn = sumCol(adv, 'deposit');
   const advDue = sumCol(adv, 'remaining');
   // Net income counts the money actually RECEIVED (paid on events + advances in hand),
@@ -660,6 +676,23 @@ function renderFinance() {
         <td class="num">${money(advDue)}</td><td></td></tr></tfoot>` : ''}
     </table>
     <div class="addrow"><span class="muted" style="font-size:.8rem">حجوزات مؤكدة دفعت عربوناً ولم تُنجز بعد — للاطّلاع فقط (تُدار من تبويب الحجوزات)</span></div></div>
+
+    ${miss.length ? `<div class="tablebox" id="finmiss">
+      <div class="verdict taken" style="margin:0">⚠ مناسبات مكتملة غير مُدرجة في الأرباح والمصاريف
+        <small>لن تدخل في الحساب حتى تُضاف — اضغط «أضف للمالية» ويُنشأ السطر جاهزاً بالسعر والمدفوع</small></div>
+      <table>
+        <thead><tr><th>الرقم</th><th>العميل</th><th>المدينة</th><th>التاريخ</th><th>السعر</th><th>المحصّل</th><th></th></tr></thead>
+        <tbody>${miss.map((m) => `<tr>
+          <td class="num muted">${esc(m.booking_no || '—')}</td>
+          <td><b>${esc(m.client || '—')}</b></td>
+          <td>${esc(m.city || '—')}</td>
+          <td class="num">${dmy(m.event_date)}</td>
+          <td class="num">${money(m.price)}</td>
+          <td class="num">${money(collected(m))}</td>
+          <td><button class="btn btn--sm finadd" data-id="${m.id}">أضف للمالية</button></td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>` : ''}
 
     <div class="tablebox" id="finev"><table>
       <thead><tr><th>الرقم</th><th>العميل</th><th>المدينة</th><th>التاريخ</th><th>السعر</th><th>المدفوع</th><th>المصاريف</th><th>الصافي</th></tr></thead>
@@ -703,6 +736,12 @@ function renderFinance() {
       .catch((e) => { if (e.message !== 'unauthorized') toast('لم يُحفظ — تحقق من القيم', true); });
   wireEditors($('#finev', box), EVF, send('event'));
   wireEditors($('#fingen', box), GENF, send('general'));
+  // Catch-up button: the server seeds the row from the booking itself (same helper the
+  // automatic path uses), then the whole tab re-renders with it in place.
+  $$('.finadd', box).forEach((btn) => btn.onclick = () => {
+    btn.disabled = true;
+    send('event')('POST', { from_booking: Number(btn.dataset.id) });
+  });
 }
 
 let INV = null;
