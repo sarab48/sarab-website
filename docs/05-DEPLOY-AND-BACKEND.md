@@ -683,3 +683,32 @@ is a calendar entry**; the tab just draws them.
   browser flips them and both month arrows end up pointing the same way. The nav uses
   `▶`/`◀` (geometric shapes, never mirrored), with ▶ = back because time runs
   right-to-left here.
+
+### 2026-07-29 (3rd) — التقويم opens on real bookings · one clearer status palette
+
+Owner feedback after using the tab: it should default to confirmed bookings rather than
+everything, and on a phone the colours were indistinct and the calendar showed no names.
+
+- **Default is now real bookings only** (`state.calRealOnly` starts `true`): the calendar
+  answers "what am I actually committed to?", so استفسارات and عروض السعر stay out until the
+  المؤكدة فقط tick is cleared. The double-booking flag still comes from the server's
+  `conflict_dates` (all statuses), so **a hidden استفسار still raises the warning** — the
+  owner sees the danger and can untick to see what's causing it. The header says
+  «N معروضة من M مناسبة» whenever the filter is holding something back; a bare count beside
+  a thinner grid would have read as "that's all there is".
+- **Names on the phone.** The chips were `font-size:0` colour bars — a 7-column month at
+  390px gives each cell ~50px, where a full name truncates to nothing. Each chip now carries
+  two labels and CSS picks one: `.cvfull` (time + full name) on a desktop column,
+  `.cvshort` (first name alone) on a phone. Cell height 4rem, chip 0.6rem, and the
+  surrounding chrome (dow row, day numbers, agenda padding) gives up a little size to fund it.
+- **One status palette for the whole dashboard**, now `[fill, text, pure hue]`. The old ~16%
+  fills with the hue itself as the text were tuned for a wide desktop table cell; at badge
+  size on a dark phone card all six read as the same brown. Fills roughly doubled, text
+  lifted to a near-white tint, and — doing most of the work — `badge()` gained a 1px outline
+  in the pure hue. Calendar chips and agenda rows use the third value as a solid bar on their
+  start edge, so the status survives even when the name beside it is truncated away.
+  `STATUS_COLORS` is the single source; `calColor()` is the accessor with the fallback.
+- Tests: `_vmonth.mjs` now 20 checks (added `defaultRealOnly`, `countAdmitsHiding`,
+  `filterReveals`, `phoneNameVisible` — asserting `.cvshort` is the visible label, `.cvfull`
+  is not, and the chip is tall enough to hold text). Full suite re-run green. Deployed
+  `8d132bcb`; secrets intact, apex 200, /office still 302 to Access, prod 154 bookings.

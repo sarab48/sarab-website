@@ -207,9 +207,10 @@
   .cvchips{display:flex; flex-direction:column; gap:.18rem; position:relative; z-index:1}
   .cvchip{
     display:block; width:100%; text-align:start; border:none; border-radius:6px;
-    padding:.16rem .34rem; font-size:.72rem; font-weight:700; line-height:1.35;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    padding:.16rem .34rem; padding-inline-start:.5rem; font-size:.72rem; font-weight:700;
+    line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
+  .cvshort{display:none}
   .cvchip.off{text-decoration:line-through; opacity:.55}
   /* a busy day shows three and counts the rest; +N opens the day in place */
   .cvchips > .cvchip:nth-child(n+4){display:none}
@@ -221,21 +222,26 @@
   .cvagenda{border:1px solid var(--line); border-radius:var(--r); background:var(--panel); overflow:hidden}
   .cvday + .cvday{border-top:1px solid var(--line)}
   .cvdate{padding:.45rem .8rem; background:var(--panel-2); color:var(--gold); font-size:.82rem; font-weight:800}
-  .cvitem{display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; padding:.5rem .8rem; cursor:pointer; border-top:1px solid rgba(201,162,78,.08)}
+  .cvitem{display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; padding:.5rem .8rem; padding-inline-start:1rem; cursor:pointer; border-top:1px solid rgba(201,162,78,.08)}
   .cvitem:hover{background:rgba(201,162,78,.06)}
   .cvitem .t{font-variant-numeric:tabular-nums; color:var(--muted); font-size:.8rem; min-width:3.1rem}
   .cvitem .n{font-weight:700}
   .cvitem .s{margin-inline-start:auto}
 
   @media (max-width:720px){
-    /* a 7-column month can't hold names on a phone: each booking becomes a coloured
-       bar, and the agenda underneath carries the detail */
-    .cvcell{min-height:3.5rem; padding:.2rem}
-    .cvchip{font-size:0; padding:0; height:7px; border-radius:999px}
-    .cvchips > .cvchip:nth-child(n+4){display:block}
-    .cvmore{display:none}
+    /* A phone column is ~50px, so the full name would truncate to nothing — the chip
+       switches to the first name alone (.cvshort) and keeps its colour bar. Everything
+       around it gives up a little size so the name has room. */
+    .cvcell{min-height:4rem; padding:.18rem; gap:.14rem}
+    .cvchip{font-size:.6rem; padding:.1rem .16rem; padding-inline-start:.32rem; border-radius:4px; line-height:1.32}
+    .cvfull{display:none}
+    .cvshort{display:inline}
+    .cvmore{font-size:.58rem; padding:0 .16rem}
+    .cvnum{font-size:.66rem}
     .cvhead .mon{min-width:6.5rem; font-size:.95rem}
-    .cvdow{font-size:.66rem; padding:.35rem .1rem}
+    .cvdow{font-size:.64rem; padding:.3rem .05rem}
+    .cvitem{gap:.35rem; padding:.5rem .55rem; padding-inline-start:.8rem}
+    .cvitem .t{min-width:2.6rem; font-size:.76rem}
   }
 
   /* expandable row editor (finance / inventory) */
@@ -382,16 +388,30 @@
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 
-const STATUS_COLORS = {
-  'استفسار':   ['rgba(194,161,121,.16)', '#C2A179'],
-  'عرض سعر':   ['rgba(201,162,78,.16)',  '#C9A24E'],
-  'مؤكد':      ['rgba(134,185,138,.16)', '#86B98A'],
-  'دفع العربون':['rgba(127,179,201,.16)','#7FB3C9'],
-  'مكتمل':     ['rgba(165,119,67,.2)',   '#BE9668'],
-  'ملغي':      ['rgba(201,123,106,.16)', '#C97B6A'],
-};
+/*
+  One status palette for the whole dashboard: [fill, text, pure hue].
 
-const state = { meta:null, rows:[], conflicts:new Set(), confirmedClashes:new Set(), tab:'bookings', filters:{ q:'', statusIn:[], statusEx:[], month:'', upcoming:false, nopast:false, order:'date', dateCheck:'' }, editing:null, remainTouched:false, calMonth:null, calRows:[], calRealOnly:false };
+  The original ~16% fills with the hue itself as the text were tuned for a wide desktop
+  table cell. On a phone — a small badge on a dark card, or a chip in a 50px-wide calendar
+  column — every one of them read as the same brown. These keep the exact same hues but
+  roughly double the fill and lift the text to a near-white tint of it, so the six statuses
+  are told apart at a glance and in sunlight. The third value is the undiluted colour, used
+  for the solid bar on the start edge of calendar chips and agenda rows: the status still
+  reads even when the name beside it has been truncated away.
+*/
+const STATUS_COLORS = {
+  'استفسار':    ['rgba(194,161,121,.30)', '#F5E8D6', '#C2A179'],
+  'عرض سعر':    ['rgba(201,162,78,.34)',  '#FAEFCE', '#C9A24E'],
+  'مؤكد':       ['rgba(134,185,138,.36)', '#E4F5E6', '#86B98A'],
+  'دفع العربون':['rgba(127,179,201,.36)', '#E1F1F8', '#7FB3C9'],
+  'مكتمل':      ['rgba(190,150,104,.36)', '#F6E9D6', '#BE9668'],
+  'ملغي':       ['rgba(201,123,106,.30)', '#FADDD6', '#C97B6A'],
+};
+const calColor = (s) => STATUS_COLORS[s] || ['rgba(194,161,121,.2)', 'var(--text)', 'var(--muted)'];
+
+// calRealOnly starts ON: the calendar answers "what am I actually committed to?", so it
+// opens on real bookings only. Unticking brings the استفسارات and عروض السعر back in.
+const state = { meta:null, rows:[], conflicts:new Set(), confirmedClashes:new Set(), tab:'bookings', filters:{ q:'', statusIn:[], statusEx:[], month:'', upcoming:false, nopast:false, order:'date', dateCheck:'' }, editing:null, remainTouched:false, calMonth:null, calRows:[], calRealOnly:true };
 
 async function api(path, opts={}) {
   const res = await fetch(path, { headers:{'Content-Type':'application/json'}, ...opts });
@@ -485,8 +505,10 @@ function renderMonths() {
 }
 
 function badge(s) {
-  const [bg, fg] = STATUS_COLORS[s] || ['rgba(194,161,121,.12)', 'var(--muted)'];
-  return `<span class="badge" style="background:${bg};color:${fg}">${esc(s || '—')}</span>`;
+  // The outline does most of the work at badge size — a tinted fill alone still reads as
+  // "some brown pill" on a phone; a crisp edge in the pure hue names the status instantly.
+  const [bg, fg, pure] = calColor(s);
+  return `<span class="badge" style="background:${bg};color:${fg};border:1px solid ${pure}66">${esc(s || '—')}</span>`;
 }
 
 // Status priority for the date check: real bookings first, then advance, inquiries, cancelled last.
@@ -1585,12 +1607,17 @@ function renderCalendarTab(soonRows) {
     list.sort((a, b) => String(a.start_time || '~').localeCompare(String(b.start_time || '~')) || a.id - b.id);
   }
 
+  // Two labels, one chip: the full one on a desktop column, the first name alone on a
+  // phone's ~50px column — where the full name would truncate to nothing readable.
   const chip = (r) => {
-    const [bg, fg] = STATUS_COLORS[r.status] || ['rgba(194,161,121,.12)', 'var(--muted)'];
+    const [bg, fg, bar] = calColor(r.status);
     const t = String(r.start_time || '').slice(0, 5);
-    const tip = [r.booking_no || '#' + r.id, fullName(r), r.city, r.status, r.venue].filter(Boolean).join(' · ');
+    const name = fullName(r);
+    const tip = [r.booking_no || '#' + r.id, name, r.city, r.status, r.venue].filter(Boolean).join(' · ');
     return `<button class="cvchip${r.status === 'ملغي' ? ' off' : ''}" data-id="${r.id}"
-      style="background:${bg};color:${fg}" title="${esc(tip)}">${t ? esc(t) + ' ' : ''}${esc(fullName(r))}</button>`;
+      style="background:${bg};color:${fg};box-shadow:inset -3px 0 0 ${bar}" title="${esc(tip)}"
+      ><span class="cvfull">${t ? esc(t) + ' ' : ''}${esc(name)}</span><span
+       class="cvshort">${esc(name.split(' ')[0])}</span></button>`;
   };
 
   // Leading blanks so the 1st lands on its real weekday; trailing blanks square the grid.
@@ -1624,7 +1651,8 @@ function renderCalendarTab(soonRows) {
   const agenda = dates.length ? dates.map((iso) => `<div class="cvday">
       <div class="cvdate">${dmy(iso)} · ${AR_DOW[new Date(iso + 'T00:00:00Z').getUTCDay()]}${
         iso === T ? ' · اليوم' : ''}</div>
-      ${byDate.get(iso).map((r) => `<div class="cvitem" data-id="${r.id}">
+      ${byDate.get(iso).map((r) => `<div class="cvitem" data-id="${r.id}"
+        style="box-shadow:inset -3px 0 0 ${calColor(r.status)[2]}">
         <span class="t">${esc(String(r.start_time || '').slice(0, 5) || '—')}</span>
         <span class="n">${esc(fullName(r))}</span>
         <span class="muted">${esc([r.city, r.venue, r.occasion].filter(Boolean).join(' · ') || '—')}</span>
@@ -1654,7 +1682,10 @@ function renderCalendarTab(soonRows) {
       <button class="cvnav" id="cvNext" title="الشهر التالي" aria-label="الشهر التالي">◀</button>
       <button class="btn btn--ghost btn--sm" id="cvToday">اليوم</button>
       <label class="toggle"><input type="checkbox" id="cvRealOnly" ${state.calRealOnly ? 'checked' : ''}> المؤكدة فقط</label>
-      <span class="count">${state.calRows.length} مناسبة · ${count((r) => r.status === 'مؤكد' || r.status === 'مكتمل')} مؤكدة
+      <span class="count">${
+        // Say so when the filter is hiding some — "4 مناسبة" beside 12 chips would lie.
+        rows.length !== state.calRows.length ? `${rows.length} معروضة من ` : ''
+      }${state.calRows.length} مناسبة · ${count((r) => r.status === 'مؤكد' || r.status === 'مكتمل')} مؤكدة
         · ${count((r) => r.status === 'دفع العربون')} عربون · متبقٍ ${money(due)}</span>
     </div>
     ${soonHtml ? `<div class="verdict adv">${soonHtml}</div>` : ''}
