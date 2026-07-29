@@ -95,6 +95,7 @@ Confirm any stack change with the owner before introducing it.
 4. `docs/03-ASSETS.md` — the media and the analyze-first protocol
 5. `docs/04-BUILD-PLAN.md` — the phased plan to execute
 6. `docs/05-DEPLOY-AND-BACKEND.md` — booking backend, private dashboard, domain & deployment
+7. `docs/06-GOOGLE-CALENDAR.md` — confirmed bookings → the owner's Google Calendar
 
 ## Running the project
 

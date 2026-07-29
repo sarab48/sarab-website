@@ -588,3 +588,98 @@ the profit calculation.
   button closes it, non-completed bookings stay out (advances only), UI + no console errors.
   Green, plus `_venhance`, `_voffice`, `_vdeposit`, `_vstaff`, `_vcity`, `_vcampaign` re-run
   green. Pages secrets verified intact after the deploy.
+
+### 2026-07-29 — confirmed bookings go straight into the owner's Google Calendar
+
+Owner request: confirming a booking should put it in Google Calendar automatically, with a
+reminder. Built end to end; **inert until the owner completes the Google-side setup** in the
+new `docs/06-GOOGLE-CALENDAR.md` (service-account JSON + Calendar ID → three Pages secrets).
+
+- **Auth = service account, not OAuth.** The owner shares one calendar with a service
+  account address; `shared/gcal.js` signs its own RS256 JWT with Web Crypto and trades it
+  for an access token (cached per isolate). No consent screen, no refresh token, nothing
+  that expires or needs re-login — the failure mode OAuth would have brought (7-day test
+  tokens, "unverified app" screens, silent revocation) simply doesn't exist here.
+- **Reminders are deliberately `useDefault: true`.** Google: *"Reminders are private
+  information, specific to an authenticated user."* Overrides written by the service account
+  would belong to the service account and the owner's phone would never ring. The reminders
+  that fire are the calendar's own default notifications, which the owner sets (and retunes)
+  in Google Calendar — better for them, no deploy involved. Documented in the module header
+  so nobody "fixes" it back to overrides.
+- **Lifecycle**: create on مؤكد/دفع العربون/مكتمل with a date; PATCH the same event on every
+  later edit (never a duplicate; PATCH not PUT, so hand-added guests/attachments survive);
+  delete on ملغي, on a cleared date, and on booking DELETE. A confirmed booking whose date
+  already passed is never newly created. An event deleted by hand in Google is detected
+  (404) and recreated on the next save. Whether a booking belongs on the calendar is decided
+  in exactly one place — `BOOKED_STATUSES` — passed in as `onCalendar`.
+- **Nothing can cost a booking.** Every entry point returns `{ok, action, error}` and never
+  throws; unconfigured → an immediate no-op with zero latency. Save responses carry
+  `calendar`, and the drawer toast says «أُضيف لتقويم Google 🗓» or, in red, «تم الحفظ ✓ —
+  لكنه لم يصل للتقويم». Verified under a simulated Google outage: booking saved in full.
+- **Dashboard**: 🗓 تقويم Google button in الحجوزات → a panel with the connection state,
+  the linked count, what is out of step, and **مزامنة الآن** (`/office/api/calendar`
+  GET status · POST catch-up, idempotent, capped at 200 per press). Drawer footer gains a
+  «🗓 في التقويم» link on any synced booking.
+- **Migration** `db/migrations/2026-07-29-gcal.sql` — three additive nullable columns
+  (`gcal_event_id`, `gcal_link`, `gcal_synced_at`). Nothing existing read, changed or dropped.
+- **Tests** `_vcal.mjs` (port 8797, self-contained — starts its own dev server and a stub
+  Google that verifies our JWT with the real public key): 19 checks green twice in a row —
+  connect, create, event shape (times/all-day/colour/description/reminders), update-not-
+  duplicate, remove on cancel, re-add, past-skipped, save-survives-outage, gap reported,
+  backfill, idempotent re-press, delete-with-booking, panel UI, zero console errors. Whole
+  existing suite re-run green (`_voffice`, `_vdeposit`, `_vcity`, `_vcampaign`, `_vstaff`,
+  `_vfinance`, `_venhance`, `_vwa`, `_vintel`).
+- Gotchas for future sessions: (a) in `wrangler pages dev`, **`--env-file` is parsed but
+  never reaches the Worker's `env`** — only `--binding KEY=VALUE` does; (b) `_vfinance.mjs`
+  has the same leftover-rows trap as `_vwa.mjs` — its `رودينا اختبار` / `حجز قادم اختبار`
+  rows stay in the local DB and a later run picks the *old* one, failing the first assertion.
+  Clear them first: `wrangler d1 execute sarab-bookings --local --command "DELETE FROM
+  event_finances WHERE booking_no IN (SELECT booking_no FROM bookings WHERE name IN
+  ('رودينا اختبار','حجز قادم اختبار') AND booking_no IS NOT NULL); DELETE FROM bookings
+  WHERE name IN ('رودينا اختبار','حجز قادم اختبار');"`
+
+### 2026-07-29 (2nd) — التقويم tab: the month, built from the bookings themselves
+
+Owner's call after weighing the options: build our own calendar view now, keep the Google
+link on the shelf. No second source of truth was introduced — **every dated booking already
+is a calendar entry**; the tab just draws them.
+
+- **New التقويم tab**, second after الحجوزات. Month grid, Sunday-first (the document's
+  `dir=rtl` puts أحد in the rightmost column on its own — the grid is written in reading
+  order and the direction does the mirroring). Each booking is a chip coloured by its
+  الحالة from the same `STATUS_COLORS` the grid badges use, ملغي struck through; a day shows
+  three and counts the rest behind a `+N` that opens it in place (CSS `nth-child(n+4)`, no
+  re-render). Today is ringed gold, past days dimmed, and a date carrying 2+ live bookings
+  gets the existing red/amber `dateflag` plus a bar on its start edge — the same
+  double-booking warning the grid already gives, now visible a month at a time.
+- **Two ways in, one drawer**: a chip or an agenda row opens `openDrawerById` (the same path
+  the واتساب tab uses, so a booking outside the loaded rows still opens). Clicking the empty
+  part of a day opens **a new booking already carrying that date** — `openDrawer(id,
+  presetDate)`, which also means the availability/price intel strip is populated on open.
+- **Agenda under the grid**: the same month as a time-ordered list (date → time, name,
+  city/venue/occasion, طاقم, status). On a phone the grid's chips collapse to coloured bars
+  (7 columns can't hold Arabic names at 390px) and the agenda becomes the real interface —
+  one render, density handled entirely in CSS.
+- **اليوم / غداً strip** above the grid, fetched independently of the displayed month so it
+  still shows on the 31st. This is as close to a reminder as anything gets without
+  notification infrastructure — deliberately, and it is not a substitute for one.
+- **Local dates, not UTC**: `localISO()` derives today from the browser's own offset. With
+  `toISOString()` the اليوم ring lands on the wrong square between midnight and 03:00
+  Asia/Jerusalem.
+- **Month data** comes from the existing `?month=` filter — no new endpoint, no new table,
+  no migration. `state.calRows` is kept separate from `state.rows` so the الحجوزات grid's
+  filters are never disturbed.
+- **Google Calendar is now hidden unless configured**: `/office/api/meta` returns
+  `google_calendar` (`calendarConfigured(env)`) and the dashboard shows the 🗓 button only
+  when it's true. The code and the three `gcal_*` columns stay in place, completely inert,
+  ready if the owner comes back to it — nothing to undo.
+- Tests: new `_vmonth.mjs` (port 8791) — 18 checks: opens on the current month, 7 columns,
+  correct weekday padding, today ringed on the right square, chip content, hard-clash flag,
+  agenda order, «المؤكدة فقط» filter, chip→drawer, empty-day→prefilled new booking, month
+  navigation + اليوم, phone bars/agenda/no-overflow, Google button hidden, zero console
+  errors. Whole suite re-run green (`_voffice`, `_vdeposit`, `_vcity`, `_vcampaign`,
+  `_vstaff`, `_vfinance`, `_venhance`, `_vwa`, `_vintel`, `_vcal`).
+- RTL gotcha worth remembering: `‹` and `›` are `Bidi_Mirrored`, so in an RTL context the
+  browser flips them and both month arrows end up pointing the same way. The nav uses
+  `▶`/`◀` (geometric shapes, never mirrored), with ▶ = back because time runs
+  right-to-left here.

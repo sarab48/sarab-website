@@ -4,6 +4,8 @@
   is signed in. Auth handled by ../_middleware.js.
 */
 
+import { calendarConfigured } from '../../../shared/gcal.js'
+
 // Worker names already assigned to an event, one entry per person: a booking's `staff`
 // may hold several names ("أحمد، سارة"), so split the stored strings apart before
 // offering them back as the الطاقم datalist.
@@ -79,5 +81,8 @@ export async function onRequestGet({ env, data }) {
     months: months.results.map((r) => r.m),
     venues: venues.results.map((r) => r.v),
     staff: staffNames(staff.results),
+    // Whether the optional Google Calendar link is switched on (docs/06-GOOGLE-CALENDAR.md).
+    // Off = the dashboard hides its button entirely; the التقويم tab is unaffected either way.
+    google_calendar: calendarConfigured(env),
   })
 }

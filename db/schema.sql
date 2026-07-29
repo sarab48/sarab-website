@@ -38,7 +38,10 @@ CREATE TABLE IF NOT EXISTS bookings (
   status         TEXT NOT NULL DEFAULT 'استفسار',  -- الحالة (owner vocabulary; site leads = استفسار)
   source         TEXT NOT NULL DEFAULT 'website',  -- website | import:<sheet>
   lang           TEXT,                 -- site language at submit
-  extra          TEXT                  -- JSON: computed helpers + anything unmapped
+  extra          TEXT,                 -- JSON: computed helpers + anything unmapped
+  gcal_event_id  TEXT,                 -- Google Calendar event this booking owns (2026-07-29)
+  gcal_link      TEXT,                 -- that event's htmlLink, for the dashboard
+  gcal_synced_at TEXT                  -- last successful push to the calendar
 );
 CREATE INDEX IF NOT EXISTS idx_bookings_event_date ON bookings(event_date);
 CREATE INDEX IF NOT EXISTS idx_bookings_status     ON bookings(status);

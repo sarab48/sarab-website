@@ -18,4 +18,7 @@ EMAIL_TO = "sarabtech8@gmail.com"
 # Cloudflare Access (protects /office): team + this app's audience tag.
 # App "SARAB Office" id 7a7535fe-4a98-48fe-87a7-2b03a9ab86b3 (apex + www + sarab-website.pages.dev).
 ACCESS_TEAM_DOMAIN = "sarabtech.cloudflareaccess.com"
+# Google Calendar sync (docs/06-GOOGLE-CALENDAR.md). Only the timezone is public config —
+# GCAL_CLIENT_EMAIL / GCAL_PRIVATE_KEY / GCAL_CALENDAR_ID are encrypted Pages secrets.
+GCAL_TIMEZONE = "Asia/Jerusalem"
 ACCESS_AUD = "092a521ea284431e2283d6b1a58edb94d390cb5ca3ea738ec7bf8fbbb99db097"

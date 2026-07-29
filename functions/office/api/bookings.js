@@ -3,6 +3,7 @@
   SARAB-NNN number, continuing the owner's numbering). Auth: ../_middleware.js.
 */
 import { normalizeCity } from '../../../shared/intel.js'
+import { syncBookingCalendar } from '../../../shared/gcal.js'
 
 // Fields the office may write. Numbers are coerced; anything else is text.
 const WRITABLE = [
@@ -196,5 +197,7 @@ export async function onRequestPost({ request, env }) {
   const created = await env.DB.prepare('SELECT * FROM bookings WHERE id = ?1').bind(meta.last_row_id).first()
   await ensureEventFinance(env, created)
   const cityAdded = await ensureCityPrice(env, created)
-  return Response.json({ ok: true, row: created, city_added: cityAdded })
+  // Added straight in as a real booking → straight into the owner's Google Calendar.
+  const calendar = await syncBookingCalendar(env, created, { onCalendar: BOOKED_STATUSES.includes(created.status) })
+  return Response.json({ ok: true, row: created, city_added: cityAdded, calendar })
 }

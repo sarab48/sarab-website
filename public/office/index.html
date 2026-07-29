@@ -177,6 +177,67 @@
   #grid tbody tr.taken>td:first-child{box-shadow:inset 3px 0 0 #E0533E}
   @media (max-width:720px){ #grid tbody tr.taken{border-inline-start:3px solid #E0533E} }
 
+  /* ---------- التقويم: the month, built from the bookings themselves ----------
+     Sunday-first, and RTL puts أحد in the rightmost column on its own — the grid is
+     laid out in reading order and the document direction does the mirroring. */
+  .cvhead{display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; padding:.1rem .2rem}
+  .cvhead .mon{font-size:1.05rem; font-weight:800; color:var(--gold); min-width:9.5rem; text-align:center}
+  .cvnav{
+    background:var(--panel); color:var(--gold); border:1px solid var(--line); border-radius:999px;
+    width:2rem; height:2rem; display:grid; place-items:center; font-size:1.1rem; line-height:1;
+  }
+  .cvnav:hover{border-color:var(--gold)}
+  .cvgrid{
+    display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:1px;
+    background:var(--line); border:1px solid var(--line); border-radius:var(--r); overflow:hidden;
+  }
+  .cvdow{background:var(--panel-2); color:var(--muted); font-size:.75rem; font-weight:700; text-align:center; padding:.4rem .2rem}
+  .cvcell{background:var(--panel); min-height:6.4rem; padding:.3rem; display:flex; flex-direction:column; gap:.22rem; position:relative}
+  .cvcell.pad{background:rgba(30,23,15,.5)}
+  .cvcell.past{opacity:.6}
+  .cvcell.today{box-shadow:inset 0 0 0 2px var(--gold)}
+  /* negative x = the bar sits on the right edge, which is the start edge on this RTL page */
+  .cvcell.clash{box-shadow:inset -3px 0 0 #E0533E}
+  .cvcell.clash.today{box-shadow:inset 0 0 0 2px var(--gold), inset -3px 0 0 #E0533E}
+  .cvnum{font-size:.78rem; color:var(--muted); font-variant-numeric:tabular-nums; position:relative; z-index:1; pointer-events:none}
+  .cvcell.today .cvnum{color:var(--gold); font-weight:800}
+  /* the whole empty area of a day is a "new booking on this date" target */
+  .cvadd{position:absolute; inset:0; border:none; background:transparent}
+  .cvcell:hover .cvadd{background:rgba(201,162,78,.05)}
+  .cvchips{display:flex; flex-direction:column; gap:.18rem; position:relative; z-index:1}
+  .cvchip{
+    display:block; width:100%; text-align:start; border:none; border-radius:6px;
+    padding:.16rem .34rem; font-size:.72rem; font-weight:700; line-height:1.35;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .cvchip.off{text-decoration:line-through; opacity:.55}
+  /* a busy day shows three and counts the rest; +N opens the day in place */
+  .cvchips > .cvchip:nth-child(n+4){display:none}
+  .cvcell.open .cvchips > .cvchip{display:block}
+  .cvmore{background:none; border:none; color:var(--muted); font-size:.7rem; text-align:start; padding:0 .34rem}
+  .cvmore:hover{color:var(--gold)}
+
+  /* the same month as a list — the phone's primary view, and a useful running order on desktop */
+  .cvagenda{border:1px solid var(--line); border-radius:var(--r); background:var(--panel); overflow:hidden}
+  .cvday + .cvday{border-top:1px solid var(--line)}
+  .cvdate{padding:.45rem .8rem; background:var(--panel-2); color:var(--gold); font-size:.82rem; font-weight:800}
+  .cvitem{display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; padding:.5rem .8rem; cursor:pointer; border-top:1px solid rgba(201,162,78,.08)}
+  .cvitem:hover{background:rgba(201,162,78,.06)}
+  .cvitem .t{font-variant-numeric:tabular-nums; color:var(--muted); font-size:.8rem; min-width:3.1rem}
+  .cvitem .n{font-weight:700}
+  .cvitem .s{margin-inline-start:auto}
+
+  @media (max-width:720px){
+    /* a 7-column month can't hold names on a phone: each booking becomes a coloured
+       bar, and the agenda underneath carries the detail */
+    .cvcell{min-height:3.5rem; padding:.2rem}
+    .cvchip{font-size:0; padding:0; height:7px; border-radius:999px}
+    .cvchips > .cvchip:nth-child(n+4){display:block}
+    .cvmore{display:none}
+    .cvhead .mon{min-width:6.5rem; font-size:.95rem}
+    .cvdow{font-size:.66rem; padding:.35rem .1rem}
+  }
+
   /* expandable row editor (finance / inventory) */
   .editgrid{
     display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.6rem;
@@ -192,6 +253,16 @@
   .bar b{font-variant-numeric:tabular-nums}
   .statbox{padding:.8rem 1rem}
   .statbox>b{display:block; color:var(--muted); font-size:.8rem; margin-bottom:.4rem}
+
+  /* smartphone: the four KPIs as a 2×2 block. At 390px the auto-fit track (170px + gap)
+     misses two columns by a hair and stacks them one per row, pushing every tab a full
+     screen down before you reach it. */
+  @media (max-width:720px){
+    .kpis{grid-template-columns:1fr 1fr; gap:.6rem; padding:.7rem .9rem}
+    .kpi{padding:.6rem .7rem}
+    .kpi b{font-size:1.3rem}
+    .kpi span{font-size:.74rem}
+  }
 
   /* smartphone: bookings as compact 2-line rows — name+date / city+status.
      Tap opens the drawer with everything else. ~9 clients per screen. */
@@ -236,6 +307,7 @@
 
 <nav class="tabs" id="tabs">
   <button data-tab="bookings" class="on">الحجوزات</button>
+  <button data-tab="calendar">التقويم</button>
   <button data-tab="callback">إعادة الاتصال</button>
   <button data-tab="whatsapp">واتساب</button>
   <button data-tab="finance">المالية</button>
@@ -262,11 +334,13 @@
     <option value="new">الأحدث إضافةً</option>
   </select>
   <button class="btn btn--ghost btn--sm" id="csvBtn" title="تنزيل النتائج الحالية كملف CSV">CSV ⬇</button>
+  <button class="btn btn--ghost btn--sm" id="calBtn" title="حالة الربط مع تقويم Google">🗓 تقويم Google</button>
   <span class="count" id="count"></span>
 </section>
 
 <main class="wrap">
   <div class="verdict" id="dateVerdict" style="display:none"></div>
+  <div class="verdict" id="calBox" style="display:none"></div>
   <div class="tablebox" id="gridbox"><table id="grid">
     <thead><tr>
       <th>الرقم</th><th>الاسم</th><th>الهاتف</th><th>تاريخ المناسبة</th><th>النوع</th>
@@ -274,6 +348,7 @@
     </tr></thead>
     <tbody></tbody>
   </table></div>
+  <div class="pricing" id="calendar" style="display:none"></div>
   <div class="pricing" id="pricing" style="display:none"></div>
   <div class="pricing" id="finance" style="display:none"></div>
   <div class="pricing" id="insights" style="display:none"></div>
@@ -316,7 +391,7 @@ const STATUS_COLORS = {
   'ملغي':      ['rgba(201,123,106,.16)', '#C97B6A'],
 };
 
-const state = { meta:null, rows:[], conflicts:new Set(), confirmedClashes:new Set(), tab:'bookings', filters:{ q:'', statusIn:[], statusEx:[], month:'', upcoming:false, nopast:false, order:'date', dateCheck:'' }, editing:null, remainTouched:false };
+const state = { meta:null, rows:[], conflicts:new Set(), confirmedClashes:new Set(), tab:'bookings', filters:{ q:'', statusIn:[], statusEx:[], month:'', upcoming:false, nopast:false, order:'date', dateCheck:'' }, editing:null, remainTouched:false, calMonth:null, calRows:[], calRealOnly:false };
 
 async function api(path, opts={}) {
   const res = await fetch(path, { headers:{'Content-Type':'application/json'}, ...opts });
@@ -1167,6 +1242,9 @@ function renderCapi() {
 async function loadMeta() {
   state.meta = await api('/office/api/meta');
   $('#who').textContent = state.meta.email || '';
+  // Google Calendar is optional and currently unconfigured — its button only appears once
+  // the secrets are installed, so the dashboard never advertises a feature that isn't on.
+  $('#calBtn').style.display = state.meta.google_calendar ? '' : 'none';
   renderKpis(); renderChips(); renderMonths();
 }
 
@@ -1322,7 +1400,9 @@ async function openDrawerById(id) {
   openDrawer(id);
 }
 
-function openDrawer(id) {
+// `presetDate` starts a new booking on a chosen day — the التقويم tab passes the square
+// that was clicked, so the date (and its availability intel) is already filled in.
+function openDrawer(id, presetDate) {
   const row = id ? state.rows.find((r) => r.id === id) : null;
   state.editing = row ? row.id : null;
   state.remainTouched = false;
@@ -1331,7 +1411,10 @@ function openDrawer(id) {
   $('#dBody').innerHTML = '<div class="field full intel" id="intel" style="display:none"></div>' + F.map(fieldHtml).join('');
   for (const [key,, kind] of F) {
     const el = $('#f_' + key);
-    const v = row ? row[key] : (key === 'status' ? 'استفسار' : null);
+    const v = row ? row[key]
+      : key === 'status' ? 'استفسار'
+      : key === 'event_date' && presetDate ? presetDate
+      : null;
     if (kind === 'check') { el.checked = v === 1 || v === true; continue; }
     // A stored value missing from the options list must never be silently blanked
     // (saving would erase it) — surface it as a real option instead.
@@ -1384,11 +1467,16 @@ function openDrawer(id) {
   del.onclick = !row ? null : () => {
     if (!confirm(`حذف ${row.booking_no || '#' + row.id} — ${fullName(row)} نهائياً؟ لا يمكن التراجع.`)) return;
     api('/office/api/bookings/' + row.id, { method: 'DELETE' })
-      .then(() => { closeDrawer(); toast('حُذف ✓'); return Promise.all([loadMeta(), loadRows()]); })
+      .then(() => { closeDrawer(); toast('حُذف ✓'); return Promise.all([loadMeta(), state.tab === 'calendar' ? loadCalendarTab() : loadRows()]); })
       .then(() => { if (state.tab === 'whatsapp') return loadWa(); })
       .catch((e) => { if (e.message !== 'unauthorized') toast('لم يُحذف', true); });
   };
-  $('#dMeta').textContent = row ? `المصدر: ${row.source || '—'} · أُضيف: ${dmy(row.created_at)}${row.lang ? ' · لغة الموقع: ' + row.lang : ''}` : '';
+  $('#dMeta').innerHTML = row
+    ? `المصدر: ${esc(row.source || '—')} · أُضيف: ${dmy(row.created_at)}${row.lang ? ' · لغة الموقع: ' + esc(row.lang) : ''}`
+      + (row.gcal_event_id
+        ? ` · <a href="${esc(row.gcal_link || '#')}" target="_blank" rel="noopener" title="فتح الموعد في تقويم Google">🗓 في التقويم</a>`
+        : '')
+    : '';
   $('#drawer').classList.add('open'); $('#scrim').classList.add('open');
 }
 
@@ -1404,15 +1492,20 @@ async function save() {
   try {
     // A new city with a price auto-joins the price list — say so in the same toast.
     const cityNote = (r) => r.city_added ? ` · أُضيفت «${r.city_added}» لقائمة أسعار المدن` : '';
+    // …and so does what happened in Google Calendar. A calendar failure never means the
+    // booking was lost — the wording has to make that obvious.
+    const CAL_NOTE = { created: ' · أُضيف لتقويم Google 🗓', updated: ' · حُدِّث في تقويم Google 🗓', removed: ' · أُزيل من تقويم Google' };
+    const calNote = (r) => (r.calendar && r.calendar.ok === false) ? ' — لكنه لم يصل للتقويم' : (CAL_NOTE[r.calendar?.action] || '');
+    const calFailed = (r) => r.calendar?.ok === false;
     if (state.editing) {
       const r = await api('/office/api/bookings/' + state.editing, { method: 'PATCH', body: JSON.stringify(body) });
-      toast('تم الحفظ ✓' + cityNote(r));
+      toast('تم الحفظ ✓' + cityNote(r) + calNote(r), calFailed(r));
     } else {
       const r = await api('/office/api/bookings', { method: 'POST', body: JSON.stringify(body) });
-      toast(`أُنشئ ${r.row.booking_no} ✓` + cityNote(r));
+      toast(`أُنشئ ${r.row.booking_no} ✓` + cityNote(r) + calNote(r), calFailed(r));
     }
     closeDrawer();
-    await Promise.all([loadMeta(), loadRows()]);
+    await Promise.all([loadMeta(), state.tab === 'calendar' ? loadCalendarTab() : loadRows()]);
     if (state.tab === 'whatsapp') await loadWa();
   } catch (e) {
     if (e.message !== 'unauthorized') toast('لم يتم الحفظ — حاول مجدداً', true);
@@ -1438,6 +1531,209 @@ $('#csvBtn').onclick = () => {
   a.download = 'sarab-bookings.csv';
   a.click();
   URL.revokeObjectURL(a.href);
+};
+
+// ---------- 📅 التقويم — the month, built from the bookings themselves ----------
+// No second source of truth: every dated booking IS a calendar entry, coloured by its
+// الحالة. Clicking one opens the same drawer as the grid; clicking an empty day starts a
+// new booking already carrying that date.
+const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
+  'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
+const AR_DOW = ['أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+const REAL_STATUSES = ['مؤكد', 'دفع العربون', 'مكتمل'];
+
+// The owner's own day, not UTC — at 01:00 in تموز, toISOString() still says yesterday,
+// which would put the اليوم ring on the wrong square.
+const localISO = (d = new Date()) =>
+  new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+async function loadCalendarTab() {
+  state.calMonth ||= localISO().slice(0, 7);
+  const [data, soon] = await Promise.all([
+    api(`/office/api/bookings?month=${state.calMonth}&order=date&limit=1000`),
+    // Independent of the month on screen, so اليوم/غداً still shows on the 31st.
+    api('/office/api/bookings?upcoming=1&order=date&limit=60'),
+  ]);
+  state.calRows = data.rows;
+  state.conflicts = new Set(data.conflict_dates || []);
+  state.confirmedClashes = new Set(data.confirmed_clash_dates || []);
+  renderCalendarTab(soon.rows);
+}
+
+function shiftMonth(delta) {
+  const [y, m] = state.calMonth.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+  state.calMonth = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  loadCalendarTab().catch((e) => { if (e.message !== 'unauthorized') toast('تعذّر تحميل الشهر', true); });
+}
+
+function renderCalendarTab(soonRows) {
+  const box = $('#calendar');
+  const [y, mNo] = state.calMonth.split('-').map(Number);
+  const mIdx = mNo - 1;
+  const T = localISO();
+  const rows = state.calRows.filter((r) => !state.calRealOnly || REAL_STATUSES.includes(r.status));
+
+  const byDate = new Map();
+  for (const r of rows) {
+    if (!r.event_date) continue;
+    const k = String(r.event_date).slice(0, 10);
+    if (!byDate.has(k)) byDate.set(k, []);
+    byDate.get(k).push(r);
+  }
+  for (const list of byDate.values()) {
+    list.sort((a, b) => String(a.start_time || '~').localeCompare(String(b.start_time || '~')) || a.id - b.id);
+  }
+
+  const chip = (r) => {
+    const [bg, fg] = STATUS_COLORS[r.status] || ['rgba(194,161,121,.12)', 'var(--muted)'];
+    const t = String(r.start_time || '').slice(0, 5);
+    const tip = [r.booking_no || '#' + r.id, fullName(r), r.city, r.status, r.venue].filter(Boolean).join(' · ');
+    return `<button class="cvchip${r.status === 'ملغي' ? ' off' : ''}" data-id="${r.id}"
+      style="background:${bg};color:${fg}" title="${esc(tip)}">${t ? esc(t) + ' ' : ''}${esc(fullName(r))}</button>`;
+  };
+
+  // Leading blanks so the 1st lands on its real weekday; trailing blanks square the grid.
+  // Padding cells stay empty rather than borrowing the neighbouring month — showing a day
+  // whose bookings we didn't load would read as "nothing booked" when there may be plenty.
+  const lead = new Date(Date.UTC(y, mIdx, 1)).getUTCDay();
+  const days = new Date(Date.UTC(y, mIdx + 1, 0)).getUTCDate();
+  const cells = Array(lead).fill(null);
+  for (let d = 1; d <= days; d++) cells.push(d);
+  while (cells.length % 7) cells.push(null);
+
+  const cellHtml = (d) => {
+    if (!d) return '<div class="cvcell pad"></div>';
+    const iso = `${state.calMonth}-${String(d).padStart(2, '0')}`;
+    const list = byDate.get(iso) || [];
+    const clash = state.conflicts.has(iso);
+    const hard = state.confirmedClashes.has(iso);
+    const cls = ['cvcell', iso === T ? 'today' : '', iso < T ? 'past' : '', clash ? 'clash' : ''].filter(Boolean).join(' ');
+    const tip = hard ? 'حجز مؤكد + طلبات أخرى على نفس التاريخ — خطر حجز مزدوج'
+      : clash ? 'أكثر من طلب على هذا التاريخ' : '';
+    const flag = hard ? '<span class="dateflag"></span>' : clash ? '<span class="dateflag dateflag--soft"></span>' : '';
+    return `<div class="${cls}"${tip ? ` title="${tip}"` : ''}>
+      <button class="cvadd" data-new="${iso}" aria-label="حجز جديد في ${dmy(iso)}" title="حجز جديد في ${dmy(iso)}"></button>
+      <span class="cvnum">${d} ${flag}</span>
+      <div class="cvchips">${list.map(chip).join('')}${
+        list.length > 3 ? `<button class="cvmore">+${list.length - 3} أخرى</button>` : ''}</div>
+    </div>`;
+  };
+
+  const dates = [...byDate.keys()].sort();
+  const agenda = dates.length ? dates.map((iso) => `<div class="cvday">
+      <div class="cvdate">${dmy(iso)} · ${AR_DOW[new Date(iso + 'T00:00:00Z').getUTCDay()]}${
+        iso === T ? ' · اليوم' : ''}</div>
+      ${byDate.get(iso).map((r) => `<div class="cvitem" data-id="${r.id}">
+        <span class="t">${esc(String(r.start_time || '').slice(0, 5) || '—')}</span>
+        <span class="n">${esc(fullName(r))}</span>
+        <span class="muted">${esc([r.city, r.venue, r.occasion].filter(Boolean).join(' · ') || '—')}</span>
+        <span class="muted">${staffCell(r)}</span>
+        <span class="s">${badge(r.status)}</span>
+      </div>`).join('')}
+    </div>`).join('') : '<div class="empty">لا مناسبات في هذا الشهر</div>';
+
+  // اليوم / غداً — the closest thing to a reminder that needs no notifications at all.
+  const tomorrow = localISO(new Date(Date.now() + 864e5));
+  const upcoming = (iso) => (soonRows || []).filter((r) => String(r.event_date).slice(0, 10) === iso && r.status !== 'ملغي');
+  const line = (label, list) => list.length ? `<span>${label}: ${list.map((r) =>
+    esc(fullName(r)) + (r.start_time ? ` (${esc(String(r.start_time).slice(0, 5))})` : '')
+    + (r.city ? ' — ' + esc(r.city) : '')).join('، ')}</span>` : '';
+  const soonHtml = line('اليوم', upcoming(T)) + line('غداً', upcoming(tomorrow));
+
+  const count = (fn) => state.calRows.filter(fn).length;
+  const due = state.calRows.reduce((s, r) =>
+    s + (r.status !== 'ملغي' && Number(r.remaining) > 0 ? Number(r.remaining) : 0), 0);
+
+  box.innerHTML = `
+    <div class="cvhead">
+      <!-- Triangles, not ‹ ›: the angle quotes are Bidi_Mirrored, so RTL flips them and both
+           arrows end up pointing the same way. Time runs right-to-left here — back is ▶. -->
+      <button class="cvnav" id="cvPrev" title="الشهر السابق" aria-label="الشهر السابق">▶</button>
+      <span class="mon">${AR_MONTHS[mIdx]} ${y}</span>
+      <button class="cvnav" id="cvNext" title="الشهر التالي" aria-label="الشهر التالي">◀</button>
+      <button class="btn btn--ghost btn--sm" id="cvToday">اليوم</button>
+      <label class="toggle"><input type="checkbox" id="cvRealOnly" ${state.calRealOnly ? 'checked' : ''}> المؤكدة فقط</label>
+      <span class="count">${state.calRows.length} مناسبة · ${count((r) => r.status === 'مؤكد' || r.status === 'مكتمل')} مؤكدة
+        · ${count((r) => r.status === 'دفع العربون')} عربون · متبقٍ ${money(due)}</span>
+    </div>
+    ${soonHtml ? `<div class="verdict adv">${soonHtml}</div>` : ''}
+    <div class="cvgrid">
+      ${AR_DOW.map((d) => `<div class="cvdow">${d}</div>`).join('')}
+      ${cells.map(cellHtml).join('')}
+    </div>
+    <div class="cvagenda">${agenda}</div>`;
+
+  $('#cvPrev').onclick = () => shiftMonth(-1);
+  $('#cvNext').onclick = () => shiftMonth(1);
+  $('#cvToday').onclick = () => { state.calMonth = localISO().slice(0, 7); loadCalendarTab().catch(() => {}); };
+  $('#cvRealOnly').onchange = (e) => { state.calRealOnly = e.target.checked; renderCalendarTab(soonRows); };
+  $$('.cvchip, .cvitem', box).forEach((el) => el.onclick = () => openDrawerById(Number(el.dataset.id)));
+  $$('.cvmore', box).forEach((el) => el.onclick = () => el.closest('.cvcell').classList.toggle('open'));
+  $$('.cvadd', box).forEach((el) => el.onclick = () => openDrawer(null, el.dataset.new));
+}
+
+// ---------- 🗓 تقويم Google ----------
+// Every real booking (مؤكد / دفع العربون / مكتمل) is pushed to the owner's Google Calendar
+// as it is saved. This box reports whether that link is healthy and catches up anything
+// still missing — bookings made before the link existed, or saves that hit a Google outage.
+const CAL_REASON = {
+  'not-configured': 'لم تُضبط بيانات الاتصال بعد',
+  'not-shared': 'التقويم غير مُشارك مع حساب الخدمة، أو المعرّف غير صحيح',
+  unreachable: 'تعذّر الوصول إلى Google',
+};
+
+function renderCal(d) {
+  const box = $('#calBox');
+  if (!d.configured || !d.probe.ok) {
+    const why = CAL_REASON[d.probe.reason] || d.probe.reason || 'غير معروف';
+    box.className = 'verdict ' + (d.configured ? 'taken' : 'soft');
+    box.innerHTML = `<span>🗓 تقويم Google غير مُفعّل — ${esc(why)}</span>
+      <small>${esc(d.probe.detail || 'الحجوزات تُحفظ كالمعتاد؛ الربط بالتقويم فقط هو المعطّل.')}</small>
+      <button class="btn btn--ghost btn--sm" id="calHide">إخفاء</button>`;
+  } else {
+    const pend = d.pending;
+    box.className = 'verdict ' + (pend ? 'soft' : 'free');
+    box.innerHTML = `<span>🗓 متصل بتقويم «${esc(d.probe.summary || d.calendar_id)}»</span>
+      <small>${d.linked} حجز مرتبط · التوقيت ${esc(d.probe.timeZone || d.timezone)}</small>
+      ${pend
+        ? `<small>${pend} حجز بحاجة للمزامنة${d.pending_rows.length
+            ? ' — ' + d.pending_rows.slice(0, 4).map((r) =>
+                esc((r.booking_no || '#' + r.id) + ' ' + (r.name || '')) + (r.action === 'remove' ? ' (إزالة)' : '')).join('، ')
+            : ''}</small>
+           <button class="btn btn--sm" id="calSync">مزامنة الآن</button>`
+        : '<small>كل الحجوزات المؤكدة القادمة موجودة في التقويم ✓</small>'}
+      <button class="btn btn--ghost btn--sm" id="calHide">إخفاء</button>`;
+  }
+  box.style.display = '';
+  $('#calHide').onclick = () => box.style.display = 'none';
+  const sync = $('#calSync');
+  if (sync) sync.onclick = async () => {
+    sync.disabled = true; sync.textContent = 'جارٍ المزامنة…';
+    try {
+      const r = await api('/office/api/calendar', { method: 'POST' });
+      toast(`التقويم: أُضيف ${r.added} · أُزيل ${r.removed}` + (r.failed ? ` · فشل ${r.failed}` : ' ✓'), !!r.failed);
+      if (r.errors && r.errors.length) console.warn('calendar sync errors:', r.errors);
+      await Promise.all([loadCal(), loadRows()]);
+    } catch (e) {
+      if (e.message !== 'unauthorized') toast('تعذّرت المزامنة — حاول لاحقاً', true);
+      sync.disabled = false; sync.textContent = 'مزامنة الآن';
+    }
+  };
+}
+
+async function loadCal() {
+  try { renderCal(await api('/office/api/calendar')); }
+  catch (e) { if (e.message !== 'unauthorized') toast('تعذّر قراءة حالة التقويم', true); }
+}
+
+$('#calBtn').onclick = () => {
+  const box = $('#calBox');
+  if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+  box.className = 'verdict soft';
+  box.innerHTML = '<span>🗓 جارٍ فحص الربط بتقويم Google…</span>';
+  box.style.display = '';
+  loadCal();
 };
 
 // ---------- quick date-availability check (فحص تاريخ) ----------
@@ -1477,15 +1773,17 @@ $('#upcoming').onchange = (e) => { clearDateCheck(false); state.filters.upcoming
 $('#nopast').onchange = (e) => { clearDateCheck(false); state.filters.nopast = e.target.checked; loadRows(); };
 $('#order').onchange = (e) => { clearDateCheck(false); state.filters.order = e.target.value; loadRows(); };
 
-const PANES = { bookings: '#gridbox', callback: '#gridbox', cities: '#pricing', finance: '#finance', insights: '#insights', inventory: '#inventory', visitors: '#visitors', capi: '#capi', whatsapp: '#whatsapp' };
+const PANES = { bookings: '#gridbox', callback: '#gridbox', calendar: '#calendar', cities: '#pricing', finance: '#finance', insights: '#insights', inventory: '#inventory', visitors: '#visitors', capi: '#capi', whatsapp: '#whatsapp' };
 $$('#tabs button').forEach((b) => b.onclick = () => {
   $$('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
   state.tab = b.dataset.tab;
   const pane = PANES[state.tab];
   $('#filters').style.display = pane === '#gridbox' ? '' : 'none';
   $('#dateVerdict').style.display = 'none';
-  for (const sel of ['#gridbox', '#pricing', '#finance', '#insights', '#inventory', '#visitors', '#capi', '#whatsapp']) $(sel).style.display = sel === pane ? '' : 'none';
-  if (state.tab === 'cities') loadPricing().catch(() => {});
+  $('#calBox').style.display = 'none';
+  for (const sel of ['#gridbox', '#calendar', '#pricing', '#finance', '#insights', '#inventory', '#visitors', '#capi', '#whatsapp']) $(sel).style.display = sel === pane ? '' : 'none';
+  if (state.tab === 'calendar') loadCalendarTab().catch(() => {});
+  else if (state.tab === 'cities') loadPricing().catch(() => {});
   else if (state.tab === 'finance') loadFinance().catch(() => {});
   else if (state.tab === 'insights') loadInsights().catch(() => {});
   else if (state.tab === 'inventory') loadInventory().catch(() => {});
