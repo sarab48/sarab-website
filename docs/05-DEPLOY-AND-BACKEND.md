@@ -712,3 +712,32 @@ everything, and on a phone the colours were indistinct and the calendar showed n
   `filterReveals`, `phoneNameVisible` — asserting `.cvshort` is the visible label, `.cvfull`
   is not, and the chip is tall enough to hold text). Full suite re-run green. Deployed
   `8d132bcb`; secrets intact, apex 200, /office still 302 to Access, prod 154 bookings.
+
+### 2026-08-01 — التحليلات: confirmed-bookings totals with year/month filtering
+
+Owner request: "the total number of confirmed bookings (done and future), filterable to
+years and months, so I know what we have and how we are doing."
+
+- **`/office/api/insights` takes `?year=YYYY` / `?month=YYYY-MM`** (month wins; both
+  regex-validated before being inlined as an `event_date` prefix). Every aggregate in the
+  tab — KPIs, cities, occasions, sources, weekdays, venues — is scoped to the period, so
+  a year/month click turns the whole tab into "how did we do then". Two lists deliberately
+  ignore the scope so the filter bar never collapses: `years` (always all years) and
+  `months` (always the whole selected year).
+- **New `booked` summary** — the headline numbers: total confirmed (مؤكد/عربون/مكتمل),
+  split **قادمة / أُقيمت by event date** (not status — a مؤكد whose date passed counts as
+  held), plus revenue, upcoming revenue, and **المتبقي للتحصيل** (Σremaining on upcoming
+  confirmed — money still to collect, the most actionable number on the page).
+- **Tab UI**: period chips (year row + month row once a year is chosen, counts in the
+  labels, Levantine month names reused from `AR_MONTHS`), a السنوات comparison table and
+  an أشهر drill-down table — rows click to filter, clicking the active row clears that
+  level. Section headers carry the active scope so a filtered view can't be misread as
+  the all-time one. The all-months bar chart only shows unfiltered (the أشهر table
+  replaces it when a year is chosen).
+- Live-data check (read-only) while building: 183 rows, 47 confirmed (2026: 34 — 13 held,
+  21 upcoming; 2027: 13), every confirmed row has event_date + price + city. Gaps noted
+  for the owner: SARAB-090 missing نوع المناسبة; 28/47 confirmed missing تاريخ الحجز
+  (legacy import — self-heals on save); 15/167 non-cancelled missing مصدر العميل.
+- Test: `_vinsights.mjs` (port 8794) — 14 checks: KPI arithmetic per scope (seeds in 2003
+  and 2031, years no real data touches), chip/table filtering both directions, overview
+  rescoping, phone no-overflow. Screenshots `docs/styleframes/vinsights-*.png`.

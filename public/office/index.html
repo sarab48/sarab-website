@@ -869,18 +869,87 @@ function renderInventory() {
 // ---------- insights (تحليلات الحجوزات — business intelligence) ----------
 
 let INS = null;
-async function loadInsights() { INS = await api('/office/api/insights'); renderInsights(); }
+// Period filter for the whole tab: year ('' = all), month ('' = whole year, else YYYY-MM).
+const insScope = { year: '', month: '' };
+async function loadInsights() {
+  const p = new URLSearchParams();
+  if (insScope.month) p.set('month', insScope.month);
+  else if (insScope.year) p.set('year', insScope.year);
+  const qs = p.toString();
+  INS = await api('/office/api/insights' + (qs ? '?' + qs : ''));
+  renderInsights();
+}
 function renderInsights() {
   const s = INS;
   const k = s.kpi;
+  const b = s.booked || {};
   const DAY = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
   const conv = k.clients ? (k.booked / k.clients * 100).toFixed(0) : 0;
   const topClients = s.cities[0];
   const topBooked = [...s.cities].sort((a, b) => b.booked - a.booked || b.clients - a.clients)[0];
   const topRevenue = [...s.cities].sort((a, b) => b.revenue - a.revenue)[0];
-  const mLabel = (m) => m.split('-')[1] + ' / ' + m.split('-')[0];
+  const mName = (m) => AR_MONTHS[Number(m.slice(5, 7)) - 1] || m.slice(5, 7);
+  const mLabel = (m) => `${mName(m)} ${m.slice(0, 4)}`;
+  const scopeLabel = insScope.month ? mLabel(insScope.month) : insScope.year ? `سنة ${insScope.year}` : 'كل الفترات';
   const box = $('#insights');
   box.innerHTML = `
+    <div class="addrow" style="padding:0 0 .3rem;flex-wrap:wrap;gap:.45rem">
+      <b style="font-size:.85rem">📅 الفترة:</b>
+      <div class="chips">
+        <button class="chip ${!insScope.year ? 'on' : ''}" data-year="">كل السنوات</button>
+        ${s.years.map((y) => `<button class="chip ${insScope.year === y.k ? 'on' : ''}" data-year="${y.k}">${y.k} (${y.n})</button>`).join('')}
+      </div>
+      ${insScope.year ? `<div class="chips">
+        <button class="chip ${!insScope.month ? 'on' : ''}" data-month="">كل الأشهر</button>
+        ${s.months.map((m) => `<button class="chip ${insScope.month === m.k ? 'on' : ''}" data-month="${m.k}">${mName(m.k)} (${m.n})</button>`).join('')}
+      </div>` : ''}
+    </div>
+
+    <div class="finhead"><b>✅ الحجوزات المؤكدة — ${scopeLabel}</b><span class="muted">مؤكد / دفع العربون / مكتمل · التقسيم حسب تاريخ المناسبة</span></div>
+    <section class="kpis" style="padding:0">
+      <div class="kpi gold"><b>${b.total || 0}</b><span>إجمالي الحجوزات المؤكدة</span></div>
+      <div class="kpi gold"><b>${b.upcoming || 0}</b><span>قادمة (لم تُقَم بعد)</span></div>
+      <div class="kpi"><b>${b.held || 0}</b><span>أُقيمت (تاريخها مضى)</span></div>
+      <div class="kpi"><b>${money(b.revenue || 0)}</b><span>إيرادات (أسعار الحجوزات)</span></div>
+      <div class="kpi"><b>${money(b.upcoming_revenue || 0)}</b><span>إيرادات الحجوزات القادمة</span></div>
+      <div class="kpi${b.outstanding ? ' gold' : ''}"><b>${money(b.outstanding || 0)}</b><span>المتبقي للتحصيل (القادمة)</span></div>
+    </section>
+
+    <div class="finhead"><b>📆 السنوات</b><span class="muted">اضغط على سنة لتصفية كل التحليلات عليها</span></div>
+    <div class="tablebox"><table style="min-width:0">
+      <thead><tr><th>السنة</th><th>حجوزات مؤكدة</th><th>أُقيمت</th><th>قادمة</th><th>الإيرادات (أسعار)</th></tr></thead>
+      <tbody>${s.years.map((y) => `<tr data-yrow="${y.k}" style="cursor:pointer${insScope.year === y.k ? ';color:var(--gold)' : ''}">
+        <td><b>${y.k}</b></td>
+        <td class="num">${y.n}</td>
+        <td class="num">${y.n - y.upcoming}</td>
+        <td class="num">${y.upcoming}</td>
+        <td class="num">${money(y.revenue)}</td>
+      </tr>`).join('') || '<tr><td colspan="5"><div class="empty">لا حجوزات مؤكدة بعد</div></td></tr>'}</tbody>
+      ${s.years.length > 1 ? `<tfoot><tr><td>المجموع</td>
+        <td class="num">${sumCol(s.years, 'n')}</td>
+        <td class="num">${sumCol(s.years, 'n') - sumCol(s.years, 'upcoming')}</td>
+        <td class="num">${sumCol(s.years, 'upcoming')}</td>
+        <td class="num">${money(sumCol(s.years, 'revenue'))}</td></tr></tfoot>` : ''}
+    </table></div>
+
+    ${insScope.year ? `<div class="finhead"><b>🗓 أشهر ${insScope.year}</b><span class="muted">اضغط على شهر لتصفية كل التحليلات عليه</span></div>
+    <div class="tablebox"><table style="min-width:0">
+      <thead><tr><th>الشهر</th><th>حجوزات مؤكدة</th><th>أُقيمت</th><th>قادمة</th><th>الإيرادات (أسعار)</th></tr></thead>
+      <tbody>${s.months.map((m) => `<tr data-mrow="${m.k}" style="cursor:pointer${insScope.month === m.k ? ';color:var(--gold)' : ''}">
+        <td><b>${mName(m.k)}</b></td>
+        <td class="num">${m.n}</td>
+        <td class="num">${m.n - m.upcoming}</td>
+        <td class="num">${m.upcoming}</td>
+        <td class="num">${money(m.revenue)}</td>
+      </tr>`).join('') || '<tr><td colspan="5"><div class="empty">لا حجوزات مؤكدة في هذه السنة</div></td></tr>'}</tbody>
+      ${s.months.length > 1 ? `<tfoot><tr><td>المجموع</td>
+        <td class="num">${sumCol(s.months, 'n')}</td>
+        <td class="num">${sumCol(s.months, 'n') - sumCol(s.months, 'upcoming')}</td>
+        <td class="num">${sumCol(s.months, 'upcoming')}</td>
+        <td class="num">${money(sumCol(s.months, 'revenue'))}</td></tr></tfoot>` : ''}
+    </table></div>` : ''}
+
+    <div class="finhead"><b>👥 نظرة عامة — ${scopeLabel}</b>${insScope.year || insScope.month ? '<span class="muted">العملاء هنا = من تاريخ مناسبتهم ضمن الفترة المختارة</span>' : ''}</div>
     <section class="kpis" style="padding:0">
       <div class="kpi gold"><b>${k.clients || 0}</b><span>إجمالي العملاء (كل من تواصل)</span></div>
       <div class="kpi gold"><b>${k.booked || 0}</b><span>حجوزات فعلية (مؤكد / عربون / مكتمل)</span></div>
@@ -920,10 +989,23 @@ function renderInsights() {
       </tr>`).join('') || '<tr><td colspan="4"><div class="empty">لا بيانات بعد</div></td></tr>'}</tbody>
     </table></div>
 
-    ${bars('الحجوزات الفعلية بالشهر (شهر المناسبة)', s.months.map((r) => ({ k: mLabel(r.k), n: r.n })))}
+    ${insScope.year ? '' : bars('الحجوزات الفعلية بالشهر (شهر المناسبة)', s.months.map((r) => ({ k: mLabel(r.k), n: r.n })))}
     ${bars('مصادر العملاء — من أين يسمعون عنا؟', s.sources.map((r) => ({ k: `${r.k} (حجوزات: ${r.booked})`, n: r.clients })))}
     ${bars('أيام الأسبوع الأكثر حجزاً', s.weekdays.map((r) => ({ k: DAY[r.k] || r.k, n: r.n })))}
     ${bars('القاعات الأكثر تكراراً', s.venues)}`;
+
+  const setScope = (year, month) => {
+    insScope.year = year;
+    insScope.month = month;
+    loadInsights().catch(() => {});
+  };
+  $$('.chip[data-year]', box).forEach((c) => c.onclick = () => setScope(c.dataset.year, ''));
+  $$('.chip[data-month]', box).forEach((c) => c.onclick = () => setScope(insScope.year, c.dataset.month));
+  // Table rows filter too — clicking the selected one again clears that level.
+  $$('tr[data-yrow]', box).forEach((r) => r.onclick = () =>
+    setScope(r.dataset.yrow === insScope.year ? '' : r.dataset.yrow, ''));
+  $$('tr[data-mrow]', box).forEach((r) => r.onclick = () =>
+    setScope(insScope.year, r.dataset.mrow === insScope.month ? '' : r.dataset.mrow));
 }
 
 // ---------- visitors (analytics) & Meta CAPI ----------
