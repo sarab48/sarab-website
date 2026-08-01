@@ -30,7 +30,9 @@ export async function onRequestGet({ env, data }) {
     env.DB.prepare('SELECT status, COUNT(*) AS n FROM bookings GROUP BY status'),
     env.DB.prepare(`SELECT
       (SELECT COUNT(*) FROM bookings WHERE status = 'استفسار') AS inquiries,
-      (SELECT COUNT(*) FROM bookings WHERE status IN ('مؤكد','دفع العربون') AND event_date >= date('now')) AS upcoming,
+      -- Owner's rule (2026-08-01): دفع العربون is not confirmed yet — counted apart.
+      (SELECT COUNT(*) FROM bookings WHERE status = 'مؤكد' AND event_date >= date('now')) AS upcoming,
+      (SELECT COUNT(*) FROM bookings WHERE status = 'دفع العربون' AND event_date >= date('now')) AS deposit_upcoming,
       (SELECT COUNT(*) FROM bookings WHERE status = 'عرض سعر') AS quotes,
       (SELECT COALESCE(SUM(remaining), 0) FROM bookings
          WHERE status IN ('مؤكد','دفع العربون','مكتمل') AND remaining > 0) AS outstanding`),

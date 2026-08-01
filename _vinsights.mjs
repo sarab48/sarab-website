@@ -1,7 +1,10 @@
 /* التحليلات verification — confirmed-bookings totals with year/month filtering.
+   Owner's rule: دفع العربون is NOT confirmed — counted and valued separately.
    Seeds bookings in two years no other data touches (2003 held, 2031 upcoming), then
-   checks the الحجوزات المؤكدة KPIs, the year/month chips, the السنوات table, the
-   month drill-down, and that filtering rescopes the overview. Cleans up after itself.
+   checks the الحجوزات المؤكدة KPIs, the separate العربون strip, the year/month chips,
+   the السنوات/أشهر tables, the للتحصيل call list, the بيانات ناقصة helper, the
+   header-KPI split, the CSV export, and that filtering rescopes the overview.
+   Cleans up after itself.
 
    Run against `wrangler pages dev dist --port 8794` (ACCESS_DEV_BYPASS=1 in .dev.vars). */
 import { chromium } from 'playwright'
@@ -15,19 +18,19 @@ const send = (path, body, method = 'POST') =>
 const seeded = []
 const seed = async (b) => { const r = await send('/office/api/bookings', b); seeded.push(r.row.id); return r.row }
 
-// First KPI strip inside التحليلات = the confirmed-bookings row:
-// [total, upcoming, held, revenue, upcoming_revenue, outstanding]
-const bookedKpis = (page) => page.locator('#insights section.kpis').first().locator('.kpi b').allTextContents()
+// KPI strips inside التحليلات: 0 = الحجوزات المؤكدة, 1 = دفع العربون, 2 = نظرة عامة.
+const strip = (page, i) => page.locator('#insights section.kpis').nth(i).locator('.kpi b').allTextContents()
 
 const results = {}
 let browser
 try {
-  // 2031: three real bookings (4,500 ₪, 900 ₪ still to collect) + one استفسار that must not count.
+  // 2031: two confirmed (2,500 ₪; أ still owes 400) + one عربون (2,000 ₪ full, 500 paid,
+  // 1,500 open) + one استفسار that must count nowhere.
   await seed({ name: 'تحليل أ', phone: '0590000011', status: 'مؤكد', event_date: '2031-05-10', price: 1000, remaining: 400 })
-  await seed({ name: 'تحليل ب', phone: '0590000012', status: 'دفع العربون', event_date: '2031-05-20', price: 2000, remaining: 500 })
+  await seed({ name: 'تحليل ب', phone: '0590000012', status: 'دفع العربون', event_date: '2031-05-20', price: 2000, deposit: 500, remaining: 1500 })
   await seed({ name: 'تحليل ج', phone: '0590000013', status: 'مؤكد', event_date: '2031-08-15', price: 1500, remaining: 0 })
   await seed({ name: 'تحليل د', phone: '0590000014', status: 'استفسار', event_date: '2031-05-11' })
-  // 2003: one booking whose date passed → held, never upcoming.
+  // 2003: one confirmed whose date passed → held, never upcoming.
   await seed({ name: 'تحليل هـ', phone: '0590000015', status: 'مؤكد', event_date: '2003-06-10', price: 800 })
 
   browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] })
@@ -38,52 +41,81 @@ try {
 
   await page.goto(BASE + '/office/', { waitUntil: 'networkidle' })
   await page.waitForSelector('#grid tbody tr[data-id]', { timeout: 15000 })
+
+  // Header KPIs: the deposit count is its own tile now, not inside مواعيد مؤكدة قادمة.
+  results.headerSplit = (await page.locator('#kpis .kpi', { hasText: 'عربون مدفوع — بانتظار التأكيد' }).count()) === 1
+
   await page.locator('#tabs button[data-tab="insights"]').click()
   await page.waitForSelector('#insights .chip[data-year]', { timeout: 10000 })
 
-  // Unfiltered: كل السنوات is on, both seeded years show as chips with their counts,
-  // and the السنوات table carries a totals row.
+  // Unfiltered: كل السنوات on; chips carry CONFIRMED counts (عربون not inside);
+  // the 2031 year row shows the عربون in its own column and only confirmed revenue.
   results.allChipDefault = await page.locator('#insights .chip[data-year=""].on').count() === 1
-  results.yearChips = (await page.locator('#insights .chip[data-year="2031"]').textContent()).includes('(3)')
+  results.yearChips = (await page.locator('#insights .chip[data-year="2031"]').textContent()).includes('(2)')
     && (await page.locator('#insights .chip[data-year="2003"]').textContent()).includes('(1)')
-  results.yearsTable = (await page.locator('#insights tr[data-yrow]').count()) >= 2
-    && (await page.locator('#insights tr[data-yrow="2031"]').textContent()).includes('4,500')
+  const y31 = await page.locator('#insights tr[data-yrow="2031"] td').allTextContents()
+  results.yearRowSplit = y31[1] === '2' && y31[4] === '1' && y31[5] === '2,500 ₪'
   results.noMonthChipsYet = (await page.locator('#insights .chip[data-month]').count()) === 0
 
-  // Filter to 2031: totals become that year's — 3 confirmed, all upcoming, 900 ₪ to collect —
-  // and the month chips + أشهر table appear.
+  // Filter to 2031: confirmed = 2 (all upcoming, 400 ₪ to collect); عربون strip = 1
+  // booking worth 2,000 ₪ with 500 ₪ already in hand.
   await page.locator('#insights .chip[data-year="2031"]').click()
   await page.waitForSelector('#insights .chip[data-month]', { timeout: 10000 })
-  let k = await bookedKpis(page)
-  results.year2031Kpis = k[0] === '3' && k[1] === '3' && k[2] === '0'
-    && k[3] === '4,500 ₪' && k[4] === '4,500 ₪' && k[5] === '900 ₪'
-  results.monthChips = (await page.locator('#insights .chip[data-month="2031-05"]').textContent()).includes('أيار')
-    && (await page.locator('#insights .chip[data-month="2031-05"]').textContent()).includes('(2)')
-    && (await page.locator('#insights .chip[data-month="2031-08"]').textContent()).includes('آب')
-  results.monthsTable = (await page.locator('#insights tr[data-mrow]').count()) === 2
-  // Overview rescopes too: 4 clients with a 2031 event (3 booked + the استفسار), 75% conversion.
-  const overview = await page.locator('#insights section.kpis').nth(1).locator('.kpi b').allTextContents()
-  results.overviewScoped = overview[0] === '4' && overview[1] === '3' && overview[2] === '75%'
+  let k = await strip(page, 0)
+  results.year2031Confirmed = k[0] === '2' && k[1] === '2' && k[2] === '0'
+    && k[3] === '2,500 ₪' && k[4] === '2,500 ₪' && k[5] === '400 ₪'
+  const dep = await strip(page, 1)
+  results.year2031Deposit = dep[0] === '1' && dep[1] === '1' && dep[2] === '2,000 ₪' && dep[3] === '500 ₪'
+  results.monthChips = (await page.locator('#insights .chip[data-month="2031-05"]').textContent()).includes('أيار (1)')
+    && (await page.locator('#insights .chip[data-month="2031-08"]').textContent()).includes('آب (1)')
+  const m05 = await page.locator('#insights tr[data-mrow="2031-05"] td').allTextContents()
+  results.monthRowSplit = m05[1] === '1' && m05[4] === '1' && m05[5] === '1,000 ₪'
+  // Overview rescopes: 4 clients with a 2031 event, 2 confirmed → 50%.
+  const overview = await strip(page, 2)
+  results.overviewScoped = overview[0] === '4' && overview[1] === '2' && overview[2] === '50%'
 
-  // Drill into أيار: 2 bookings, 3,000 ₪, the 900 ₪ outstanding lives here.
+  // للتحصيل: both the confirmed أ (400) and the عربون ب (1,500) are on the call list,
+  // soonest first, totalled together — and a row opens its booking.
+  results.collections = (await page.locator('#insights tr[data-open]', { hasText: 'تحليل أ' }).first().textContent()).includes('400 ₪')
+    && (await page.locator('#insights tr[data-open]', { hasText: 'تحليل ب' }).first().textContent()).includes('1,500 ₪')
+    && (await page.locator('#insights tfoot', { hasText: 'مع العربون' }).textContent()).includes('1,900 ₪')
+  await page.locator('#insights tr[data-open]', { hasText: 'تحليل أ' }).first().click()
+  await page.waitForTimeout(600)
+  results.collectionOpensDrawer = (await page.locator('#drawer.open').isVisible())
+    && (await page.locator('#dTitle').textContent()).includes('تحليل أ')
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(400)
+
+  // بيانات ناقصة: the seeds carry no مصدر العميل, so أ must be listed with that flag.
+  results.gaps = (await page.locator('#insights tr[data-open]', { hasText: 'تحليل أ' }).last().textContent()).includes('مصدر العميل')
+
+  // The demand-trend chart (bookings signed per month) renders.
+  results.madeChart = (await page.locator('#insights .statbox', { hasText: 'حجوزات جديدة بالشهر' }).count()) === 1
+
+  // Drill into أيار: 1 confirmed worth 1,000 ₪ owing 400 ₪; the عربون strip keeps ب.
   await page.locator('#insights .chip[data-month="2031-05"]').click()
   await page.waitForFunction(() => document.querySelector('#insights .chip[data-month="2031-05"]')?.classList.contains('on'), null, { timeout: 10000 })
-  k = await bookedKpis(page)
-  results.monthKpis = k[0] === '2' && k[1] === '2' && k[3] === '3,000 ₪' && k[5] === '900 ₪'
-  // The أشهر table still lists the whole year while أيار is selected.
+  k = await strip(page, 0)
+  results.monthKpis = k[0] === '1' && k[3] === '1,000 ₪' && k[5] === '400 ₪'
+    && (await strip(page, 1))[0] === '1'
   results.monthTableKeepsYear = (await page.locator('#insights tr[data-mrow]').count()) === 2
 
   // Clicking the آب row switches the month filter to it.
   await page.locator('#insights tr[data-mrow="2031-08"]').click()
   await page.waitForFunction(() => document.querySelector('#insights .chip[data-month="2031-08"]')?.classList.contains('on'), null, { timeout: 10000 })
-  k = await bookedKpis(page)
+  k = await strip(page, 0)
   results.rowSwitchesMonth = k[0] === '1' && k[3] === '1,500 ₪'
 
-  // 2003 is all held, nothing upcoming, nothing to collect.
+  // 2003 is all held; its CSV export carries the scope in the filename.
   await page.locator('#insights .chip[data-year="2003"]').click()
   await page.waitForFunction(() => document.querySelector('#insights .chip[data-year="2003"]')?.classList.contains('on'), null, { timeout: 10000 })
-  k = await bookedKpis(page)
+  k = await strip(page, 0)
   results.heldYear = k[0] === '1' && k[1] === '0' && k[2] === '1' && k[3] === '800 ₪' && k[5] === '0 ₪'
+  const [dl] = await Promise.all([
+    page.waitForEvent('download', { timeout: 10000 }),
+    page.locator('#insCsv').click(),
+  ])
+  results.csvExport = dl.suggestedFilename() === 'sarab-insights-2003.csv'
 
   // Back to everything.
   await page.locator('#insights .chip[data-year=""]').click()

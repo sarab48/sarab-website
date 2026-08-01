@@ -471,6 +471,7 @@ function renderKpis() {
   const k = state.meta.kpi;
   $('#kpis').innerHTML = `
     <div class="kpi gold"><b>${k.upcoming}</b><span>مواعيد مؤكدة قادمة</span></div>
+    <div class="kpi"><b>${k.deposit_upcoming || 0}</b><span>عربون مدفوع — بانتظار التأكيد</span></div>
     <div class="kpi"><b>${k.inquiries}</b><span>استفسارات مفتوحة</span></div>
     <div class="kpi"><b>${k.quotes}</b><span>عروض سعر</span></div>
     <div class="kpi gold"><b>${money(k.outstanding)}</b><span>مبالغ متبقية للتحصيل</span></div>`;
@@ -772,7 +773,7 @@ function renderFinance() {
         <td class="num pos">${money(advIn)}</td>
         <td class="num">${money(advDue)}</td><td></td></tr></tfoot>` : ''}
     </table>
-    <div class="addrow"><span class="muted" style="font-size:.8rem">حجوزات مؤكدة دفعت عربوناً ولم تُنجز بعد — للاطّلاع فقط (تُدار من تبويب الحجوزات)</span></div></div>
+    <div class="addrow"><span class="muted" style="font-size:.8rem">حجوزات دفعت عربوناً ولم تُنجز بعد (مؤكدة أو بانتظار التأكيد — الحالة مبيّنة لكل سطر) — للاطّلاع فقط (تُدار من تبويب الحجوزات)</span></div></div>
 
     ${miss.length ? `<div class="tablebox" id="finmiss">
       <div class="verdict taken" style="margin:0">⚠ مناسبات مكتملة غير مُدرجة في الأرباح والمصاريف
@@ -883,6 +884,7 @@ function renderInsights() {
   const s = INS;
   const k = s.kpi;
   const b = s.booked || {};
+  const d = s.deposit || {};
   const DAY = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
   const conv = k.clients ? (k.booked / k.clients * 100).toFixed(0) : 0;
   const topClients = s.cities[0];
@@ -903,56 +905,87 @@ function renderInsights() {
         <button class="chip ${!insScope.month ? 'on' : ''}" data-month="">كل الأشهر</button>
         ${s.months.map((m) => `<button class="chip ${insScope.month === m.k ? 'on' : ''}" data-month="${m.k}">${mName(m.k)} (${m.n})</button>`).join('')}
       </div>` : ''}
+      <button class="btn btn--ghost btn--sm" id="insCsv" title="تنزيل كل جداول التحليلات (بالفترة المختارة) كملف CSV">CSV ⬇</button>
     </div>
 
-    <div class="finhead"><b>✅ الحجوزات المؤكدة — ${scopeLabel}</b><span class="muted">مؤكد / دفع العربون / مكتمل · التقسيم حسب تاريخ المناسبة</span></div>
+    <div class="finhead"><b>✅ الحجوزات المؤكدة — ${scopeLabel}</b><span class="muted">مؤكد / مكتمل فقط — دفع العربون معدود على حدة تحته · التقسيم حسب تاريخ المناسبة</span></div>
     <section class="kpis" style="padding:0">
       <div class="kpi gold"><b>${b.total || 0}</b><span>إجمالي الحجوزات المؤكدة</span></div>
       <div class="kpi gold"><b>${b.upcoming || 0}</b><span>قادمة (لم تُقَم بعد)</span></div>
       <div class="kpi"><b>${b.held || 0}</b><span>أُقيمت (تاريخها مضى)</span></div>
       <div class="kpi"><b>${money(b.revenue || 0)}</b><span>إيرادات (أسعار الحجوزات)</span></div>
       <div class="kpi"><b>${money(b.upcoming_revenue || 0)}</b><span>إيرادات الحجوزات القادمة</span></div>
-      <div class="kpi${b.outstanding ? ' gold' : ''}"><b>${money(b.outstanding || 0)}</b><span>المتبقي للتحصيل (القادمة)</span></div>
+      <div class="kpi${b.outstanding ? ' gold' : ''}"><b>${money(b.outstanding || 0)}</b><span>المتبقي للتحصيل (المؤكدة القادمة)</span></div>
     </section>
 
-    <div class="finhead"><b>📆 السنوات</b><span class="muted">اضغط على سنة لتصفية كل التحليلات عليها</span></div>
+    <div class="finhead"><b>⏳ دفع العربون — بانتظار التأكيد — ${scopeLabel}</b><span class="muted">دفعوا عربوناً ولم يتأكدوا بعد — خارج عدّ المؤكد</span></div>
+    <section class="kpis" style="padding:0">
+      <div class="kpi"><b>${d.total || 0}</b><span>حجوزات بعربون مدفوع</span></div>
+      <div class="kpi"><b>${d.upcoming || 0}</b><span>منها قادمة</span></div>
+      <div class="kpi"><b>${money(d.value || 0)}</b><span>قيمتها الكاملة (إن تأكدت)</span></div>
+      <div class="kpi"><b>${money(d.collected || 0)}</b><span>العرابين المقبوضة منها</span></div>
+    </section>
+
+    <div class="finhead"><b>📆 السنوات</b><span class="muted">اضغط على سنة لتصفية كل التحليلات عليها · العربون معدود على حدة</span></div>
     <div class="tablebox"><table style="min-width:0">
-      <thead><tr><th>السنة</th><th>حجوزات مؤكدة</th><th>أُقيمت</th><th>قادمة</th><th>الإيرادات (أسعار)</th></tr></thead>
+      <thead><tr><th>السنة</th><th>حجوزات مؤكدة</th><th>أُقيمت</th><th>قادمة</th><th>عربون (منفصل)</th><th>الإيرادات (أسعار المؤكدة)</th></tr></thead>
       <tbody>${s.years.map((y) => `<tr data-yrow="${y.k}" style="cursor:pointer${insScope.year === y.k ? ';color:var(--gold)' : ''}">
         <td><b>${y.k}</b></td>
         <td class="num">${y.n}</td>
         <td class="num">${y.n - y.upcoming}</td>
         <td class="num">${y.upcoming}</td>
+        <td class="num">${y.dep || ''}</td>
         <td class="num">${money(y.revenue)}</td>
-      </tr>`).join('') || '<tr><td colspan="5"><div class="empty">لا حجوزات مؤكدة بعد</div></td></tr>'}</tbody>
+      </tr>`).join('') || '<tr><td colspan="6"><div class="empty">لا حجوزات مؤكدة بعد</div></td></tr>'}</tbody>
       ${s.years.length > 1 ? `<tfoot><tr><td>المجموع</td>
         <td class="num">${sumCol(s.years, 'n')}</td>
         <td class="num">${sumCol(s.years, 'n') - sumCol(s.years, 'upcoming')}</td>
         <td class="num">${sumCol(s.years, 'upcoming')}</td>
+        <td class="num">${sumCol(s.years, 'dep')}</td>
         <td class="num">${money(sumCol(s.years, 'revenue'))}</td></tr></tfoot>` : ''}
     </table></div>
 
     ${insScope.year ? `<div class="finhead"><b>🗓 أشهر ${insScope.year}</b><span class="muted">اضغط على شهر لتصفية كل التحليلات عليه</span></div>
     <div class="tablebox"><table style="min-width:0">
-      <thead><tr><th>الشهر</th><th>حجوزات مؤكدة</th><th>أُقيمت</th><th>قادمة</th><th>الإيرادات (أسعار)</th></tr></thead>
+      <thead><tr><th>الشهر</th><th>حجوزات مؤكدة</th><th>أُقيمت</th><th>قادمة</th><th>عربون (منفصل)</th><th>الإيرادات (أسعار المؤكدة)</th></tr></thead>
       <tbody>${s.months.map((m) => `<tr data-mrow="${m.k}" style="cursor:pointer${insScope.month === m.k ? ';color:var(--gold)' : ''}">
         <td><b>${mName(m.k)}</b></td>
         <td class="num">${m.n}</td>
         <td class="num">${m.n - m.upcoming}</td>
         <td class="num">${m.upcoming}</td>
+        <td class="num">${m.dep || ''}</td>
         <td class="num">${money(m.revenue)}</td>
-      </tr>`).join('') || '<tr><td colspan="5"><div class="empty">لا حجوزات مؤكدة في هذه السنة</div></td></tr>'}</tbody>
+      </tr>`).join('') || '<tr><td colspan="6"><div class="empty">لا حجوزات مؤكدة في هذه السنة</div></td></tr>'}</tbody>
       ${s.months.length > 1 ? `<tfoot><tr><td>المجموع</td>
         <td class="num">${sumCol(s.months, 'n')}</td>
         <td class="num">${sumCol(s.months, 'n') - sumCol(s.months, 'upcoming')}</td>
         <td class="num">${sumCol(s.months, 'upcoming')}</td>
+        <td class="num">${sumCol(s.months, 'dep')}</td>
         <td class="num">${money(sumCol(s.months, 'revenue'))}</td></tr></tfoot>` : ''}
+    </table></div>` : ''}
+
+    ${s.collections.length ? `<div class="finhead"><b>💰 للتحصيل — مناسبات قادمة عليها متبقٍ — ${scopeLabel}</b><span class="muted">قائمة الاتصال: الأقرب موعداً أولاً · اضغط على سطر لفتح الحجز</span></div>
+    <div class="tablebox"><table>
+      <thead><tr><th>تاريخ المناسبة</th><th>الرقم</th><th>الاسم</th><th>الهاتف</th><th>المدينة</th><th>الحالة</th><th>السعر</th><th>المدفوع (عربون)</th><th>المتبقي</th></tr></thead>
+      <tbody>${s.collections.map((r) => `<tr data-open="${r.id}" style="cursor:pointer">
+        <td class="num">${dmy(r.event_date)}</td>
+        <td class="num muted">${esc(r.booking_no || '#' + r.id)}</td>
+        <td><b>${esc(r.name || '—')}</b></td>
+        <td class="num">${esc(r.phone || '—')}</td>
+        <td>${esc(r.city || '—')}</td>
+        <td>${badge(r.status)}</td>
+        <td class="num">${money(r.price)}</td>
+        <td class="num">${money(r.deposit)}</td>
+        <td class="num"><b>${money(r.remaining)}</b></td>
+      </tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="8">المجموع (${s.collections.length} حجز — مع العربون)</td>
+        <td class="num">${money(sumCol(s.collections, 'remaining'))}</td></tr></tfoot>
     </table></div>` : ''}
 
     <div class="finhead"><b>👥 نظرة عامة — ${scopeLabel}</b>${insScope.year || insScope.month ? '<span class="muted">العملاء هنا = من تاريخ مناسبتهم ضمن الفترة المختارة</span>' : ''}</div>
     <section class="kpis" style="padding:0">
       <div class="kpi gold"><b>${k.clients || 0}</b><span>إجمالي العملاء (كل من تواصل)</span></div>
-      <div class="kpi gold"><b>${k.booked || 0}</b><span>حجوزات فعلية (مؤكد / عربون / مكتمل)</span></div>
+      <div class="kpi gold"><b>${k.booked || 0}</b><span>حجوزات مؤكدة (مؤكد / مكتمل)</span></div>
       <div class="kpi"><b>${conv}%</b><span>نسبة التحويل: عميل ← حجز</span></div>
       <div class="kpi"><b>${money(Math.round(k.avg_price || 0))}</b><span>متوسط سعر الحجز</span></div>
       <div class="kpi gold"><b>${esc(topClients ? topClients.k : '—')}</b><span>أكثر مدينة عملاءً${topClients ? ` (${topClients.clients})` : ''}</span></div>
@@ -961,7 +994,7 @@ function renderInsights() {
       <div class="kpi"><b>${k.cancelled || 0}</b><span>حجوزات ملغاة</span></div>
     </section>
 
-    <div class="finhead"><b>🏙 المدن — من أين يأتي العمل؟</b><span class="muted">مرتّبة حسب عدد العملاء · الحجوزات = مؤكد/عربون/مكتمل</span></div>
+    <div class="finhead"><b>🏙 المدن — من أين يأتي العمل؟</b><span class="muted">مرتّبة حسب عدد العملاء · الحجوزات = مؤكد/مكتمل</span></div>
     <div class="tablebox"><table style="min-width:0">
       <thead><tr><th>المدينة</th><th>العملاء</th><th>حجوزات فعلية</th><th>نسبة التحويل</th><th>الإيرادات (أسعار)</th></tr></thead>
       <tbody>${s.cities.map((c) => `<tr>
@@ -989,10 +1022,25 @@ function renderInsights() {
       </tr>`).join('') || '<tr><td colspan="4"><div class="empty">لا بيانات بعد</div></td></tr>'}</tbody>
     </table></div>
 
-    ${insScope.year ? '' : bars('الحجوزات الفعلية بالشهر (شهر المناسبة)', s.months.map((r) => ({ k: mLabel(r.k), n: r.n })))}
+    ${insScope.year ? '' : bars('الحجوزات المؤكدة بالشهر (شهر المناسبة)', s.months.map((r) => ({ k: mLabel(r.k), n: r.n })))}
+    ${bars('📈 حجوزات جديدة بالشهر (تاريخ الحجز — متى وقّعنا)', s.made.map((r) => ({ k: mLabel(r.k) + (r.dep ? ` (+${r.dep} عربون)` : ''), n: r.n })))}
     ${bars('مصادر العملاء — من أين يسمعون عنا؟', s.sources.map((r) => ({ k: `${r.k} (حجوزات: ${r.booked})`, n: r.clients })))}
     ${bars('أيام الأسبوع الأكثر حجزاً', s.weekdays.map((r) => ({ k: DAY[r.k] || r.k, n: r.n })))}
-    ${bars('القاعات الأكثر تكراراً', s.venues)}`;
+    ${bars('القاعات الأكثر تكراراً', s.venues)}
+
+    ${s.gaps.length ? `<div class="finhead"><b>🧩 بيانات ناقصة (${s.gaps.length}${s.gaps.length === 60 ? '+' : ''})</b><span class="muted">سجلات ينقصها ما تعتمد عليه التحليلات — اضغط على سطر لإكماله (القائمة عامة، لا تتأثر بالفترة)</span></div>
+    <div class="tablebox"><table style="min-width:0">
+      <thead><tr><th>الرقم</th><th>الاسم</th><th>تاريخ المناسبة</th><th>الحالة</th><th>الناقص</th></tr></thead>
+      <tbody>${s.gaps.map((g) => `<tr data-open="${g.id}" style="cursor:pointer">
+        <td class="num muted">${esc(g.booking_no || '#' + g.id)}</td>
+        <td><b>${esc(g.name || '—')}</b></td>
+        <td class="num">${dmy(g.event_date)}</td>
+        <td>${badge(g.status)}</td>
+        <td>${[g.miss_occasion && 'نوع المناسبة', g.miss_source && 'مصدر العميل',
+               g.miss_phone && 'الهاتف', g.miss_booked_at && 'تاريخ الحجز']
+              .filter(Boolean).map((t) => `<span class="chip ex" style="text-decoration:none">${t}</span>`).join(' ')}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>` : ''}`;
 
   const setScope = (year, month) => {
     insScope.year = year;
@@ -1006,6 +1054,42 @@ function renderInsights() {
     setScope(r.dataset.yrow === insScope.year ? '' : r.dataset.yrow, ''));
   $$('tr[data-mrow]', box).forEach((r) => r.onclick = () =>
     setScope(insScope.year, r.dataset.mrow === insScope.month ? '' : r.dataset.mrow));
+  // للتحصيل and بيانات ناقصة rows open the booking itself.
+  $$('tr[data-open]', box).forEach((r) => r.onclick = () => openDrawerById(Number(r.dataset.open)));
+  $('#insCsv', box).onclick = () => {
+    const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const L = [];
+    const sec = (title, head, rows) => {
+      L.push(q(title), head.map(q).join(','));
+      rows.forEach((r) => L.push(r.map(q).join(',')));
+      L.push('');
+    };
+    sec(`الحجوزات المؤكدة — ${scopeLabel}`,
+      ['الإجمالي', 'قادمة', 'أقيمت', 'الإيرادات', 'إيرادات القادمة', 'المتبقي للتحصيل'],
+      [[b.total, b.upcoming, b.held, b.revenue, b.upcoming_revenue, b.outstanding]]);
+    sec(`دفع العربون (منفصل) — ${scopeLabel}`,
+      ['العدد', 'قادمة', 'القيمة الكاملة', 'العرابين المقبوضة'],
+      [[d.total, d.upcoming, d.value, d.collected]]);
+    sec('السنوات', ['السنة', 'مؤكدة', 'أقيمت', 'قادمة', 'عربون', 'الإيرادات'],
+      s.years.map((y) => [y.k, y.n, y.n - y.upcoming, y.upcoming, y.dep, y.revenue]));
+    sec('الأشهر', ['الشهر', 'مؤكدة', 'أقيمت', 'قادمة', 'عربون', 'الإيرادات'],
+      s.months.map((m) => [m.k, m.n, m.n - m.upcoming, m.upcoming, m.dep, m.revenue]));
+    sec('حجوزات جديدة بالشهر (تاريخ الحجز)', ['الشهر', 'مؤكدة', 'عربون'],
+      s.made.map((r) => [r.k, r.n, r.dep]));
+    sec(`المدن — ${scopeLabel}`, ['المدينة', 'العملاء', 'حجوزات مؤكدة', 'الإيرادات'],
+      s.cities.map((c) => [c.k, c.clients, c.booked, c.revenue]));
+    sec(`المناسبات — ${scopeLabel}`, ['النوع', 'العملاء', 'حجوزات مؤكدة', 'الإيرادات'],
+      s.occasions.map((c) => [c.k, c.clients, c.booked, c.revenue]));
+    sec(`المصادر — ${scopeLabel}`, ['المصدر', 'العملاء', 'حجوزات مؤكدة'],
+      s.sources.map((c) => [c.k, c.clients, c.booked]));
+    sec(`للتحصيل — ${scopeLabel}`, ['التاريخ', 'الرقم', 'الاسم', 'الهاتف', 'المدينة', 'الحالة', 'السعر', 'العربون', 'المتبقي'],
+      s.collections.map((r) => [r.event_date, r.booking_no || '#' + r.id, r.name, r.phone, r.city, r.status, r.price, r.deposit, r.remaining]));
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff' + L.join('\n')], { type: 'text/csv;charset=utf-8' }));
+    a.download = `sarab-insights-${insScope.month || insScope.year || 'all'}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 }
 
 // ---------- visitors (analytics) & Meta CAPI ----------
@@ -1763,7 +1847,7 @@ function renderCalendarTab(soonRows) {
       <span class="mon">${AR_MONTHS[mIdx]} ${y}</span>
       <button class="cvnav" id="cvNext" title="الشهر التالي" aria-label="الشهر التالي">◀</button>
       <button class="btn btn--ghost btn--sm" id="cvToday">اليوم</button>
-      <label class="toggle"><input type="checkbox" id="cvRealOnly" ${state.calRealOnly ? 'checked' : ''}> المؤكدة فقط</label>
+      <label class="toggle" title="مؤكد، دفع العربون، مكتمل — بدون الاستفسارات وعروض السعر"><input type="checkbox" id="cvRealOnly" ${state.calRealOnly ? 'checked' : ''}> الحجوزات الفعلية فقط</label>
       <span class="count">${
         // Say so when the filter is hiding some — "4 مناسبة" beside 12 chips would lie.
         rows.length !== state.calRows.length ? `${rows.length} معروضة من ` : ''

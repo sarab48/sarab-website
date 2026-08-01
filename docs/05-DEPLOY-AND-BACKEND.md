@@ -741,3 +741,35 @@ years and months, so I know what we have and how we are doing."
 - Test: `_vinsights.mjs` (port 8794) — 14 checks: KPI arithmetic per scope (seeds in 2003
   and 2031, years no real data touches), chip/table filtering both directions, overview
   rescoping, phone no-overflow. Screenshots `docs/styleframes/vinsights-*.png`.
+
+### 2026-08-01 (2nd) — العربون is not confirmed · booked_at backfilled · the call list
+
+Owner rulings on the morning's release: **دفع العربون must not count as confirmed**
+("they are not yet"), backfill the missing booking dates, and build the suggested
+features. The CAPI tab already lived by that rule ("خارج العدّ المؤكد") — the التحليلات
+tab and the header KPI were the two places still merging them.
+
+- **Confirmed = مؤكد / مكتمل everywhere in analytics.** `/office/api/insights` now
+  aggregates on that pair; دفع العربون gets its own strip (count / upcoming / full value
+  if confirmed / deposits in hand), its own column in the السنوات and أشهر tables, and
+  its own header tile («عربون مدفوع — بانتظار التأكيد» — meta.js `deposit_upcoming`,
+  split out of `upcoming`). Operational logic is untouched **by design**: bookings.js
+  `BOOKED_STATUSES` still numbers, stamps and calendar-syncs all three statuses.
+  Label honesty pass: calendar toggle renamed «الحجوزات الفعلية فقط» (it always included
+  عربون), finance advances note no longer calls its rows مؤكدة.
+- **booked_at backfill (remote, owner-approved).** The 28 booked rows missing تاريخ الحجز
+  → `COALESCE(added_at, created_at)`. Backup
+  `ops/db-backups/2026-08-01-pre-bookedat-backfill/`; diff-verified 177/177 rows, exactly
+  28 changed, only booked_at, none deleted. Caveat recorded: the 17 oldest are workbook
+  imports whose true signing date was never recorded — they carry the import day
+  (2026-07-03), so the demand chart shows a July-2026 lump.
+- **New in التحليلات**: 💰 للتحصيل (upcoming events still owing money, confirmed + عربون
+  with the status shown, soonest first, rows open the drawer — the actionable version of
+  the outstanding KPI); 🧩 بيانات ناقصة (records missing occasion/source/phone/booking
+  date, always global, rows open the drawer to be completed); 📈 حجوزات جديدة بالشهر
+  (bookings *signed* per month via booked_at — sales pace, not event load; scoped by
+  booked_at prefix when a period is chosen); CSV ⬇ exporting every table with the active
+  scope in the filename.
+- Tests: `_vinsights.mjs` now 21 checks (deposit strip arithmetic, split columns, header
+  tile, call-list totals incl. drawer click-through, gaps flags, demand chart, CSV
+  filename); `_vmonth.mjs` re-run green after the toggle rename.
