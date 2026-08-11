@@ -66,5 +66,9 @@ export async function onRequestDelete({ env, params }) {
   const calendar = await removeBookingCalendar(env, row)
   const { meta } = await env.DB.prepare('DELETE FROM bookings WHERE id = ?1').bind(Number(params.id)).run()
   if (!meta.changes) return Response.json({ ok: false, error: 'not-found' }, { status: 404 })
+  // Its payment history goes with it — an orphaned ledger row would show a nameless
+  // payment forever. (Revisit before the receipt automation: a payment carrying an
+  // issued document should block this delete instead.)
+  await env.DB.prepare('DELETE FROM payments WHERE booking_id = ?1').bind(Number(params.id)).run()
   return Response.json({ ok: true, calendar })
 }

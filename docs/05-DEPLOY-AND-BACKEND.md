@@ -773,3 +773,58 @@ tab and the header KPI were the two places still merging them.
 - Tests: `_vinsights.mjs` now 21 checks (deposit strip arithmetic, split columns, header
   tile, call-list totals incl. drawer click-through, gaps flags, demand chart, CSV
   filename); `_vmonth.mjs` re-run green after the toggle rename.
+
+### 2026-08-11 — سجل المدفوعات: a payments ledger + سجّل دفعة (receipts groundwork)
+
+Owner approved building the enhanced payment recording now, ahead of the Invoice4U
+receipt automation (research report 2026-08-10). Owner's answers that reshape that plan:
+SARAB is registered as **עסק זעיר** (already configured in Invoice4U, two receipts made
+manually), and the document is **קבלה only** — receipt per payment, no tax invoice, no
+VAT, and therefore **no allocation numbers at all**. The automation's hardest part fell
+away; what it still needs is exactly this ledger.
+
+- **New `payments` table** (migration `2026-08-11-payments.sql`, purely additive): one
+  row per payment — booking_id, amount, kind (عربون/دفعة), method, paid_on, note,
+  source — plus dormant `doc_*` columns (type/number/PDF/status/error/api_identifier/
+  issued_at) so issued receipts can attach without another migration. `payment_method`
+  vocabulary seeded into options (نقداً، تحويل بنكي، Bit، بطاقة ائتمان، شيك، PayBox،
+  أخرى) — D1 gotcha: compound SELECT terms are capped, so the seed is one guarded
+  INSERT per value.
+- **Backfill (remote, verified)**: every deposit became an عربون row dated by
+  `booked_at` (approximate, and the rows say so in their note); a completed event that
+  collected beyond its deposit would get a دفعة row for the difference (price −
+  remaining − deposit — the finance tab's own «محصّل» rule; zero such rows existed).
+  Result: 44 rows, Σ 32,950 ₪ — matches Σdeposit exactly, **0 per-booking mismatches,
+  bookings and event_finances byte-identical to the backup**
+  (`ops/db-backups/2026-08-11-pre-payments/`).
+- **`/office/api/payments`** — GET per-booking / global (ledger + Σ by month/method +
+  KPIs + المتأخرات), POST/PATCH/DELETE. The stored totals are synced by **exact deltas**,
+  never rebuilt: a دفعة decrements `remaining`, an عربون also increments `deposit`, the
+  booking's `event_finances` row follows (`paid += amount`, `net_profit` recomputed by
+  finance.js's own rule), and a NULL `remaining` with a known price derives from
+  price − Σledger. Delete/edit reverse precisely; a payment carrying a `doc_number`
+  (future) refuses delete and amount/kind edits — a real tax document is undone with a
+  credit note, not a row delete. Deleting a booking now deletes its payments too.
+- **Drawer**: a المدفوعات panel under حالة الدفع — history (date · kind · method ·
+  amount · note), Σ, per-row delete, and the سجّل دفعة form (amount, عربون/دفعة, method,
+  date defaulting to today, note). Payments save on their own button, independent of the
+  drawer's حفظ; the fresh العربون/المتبقي land back in the open form, the cached grid
+  row, and the header KPIs. Once a booking has ledger rows, المتبقي auto-recalc follows
+  price − Σالمدفوعات instead of price − العربون (and عربون edits stop recomputing it) —
+  the ledger is the truer source. A hint appears when a payment lands on a booking still
+  marked استفسار/عرض سعر.
+- **المالية tab**: new «محصّل هذا الشهر» KPI tile; **⏰ المتأخرات** — events already held
+  that still owe money, previously surfaced *nowhere* (advances and the التحليلات call
+  list only look forward), rows open the drawer; **💳 سجل المدفوعات** (latest 120, rows
+  open the drawer); المقبوضات بالشهر and طرق الدفع bars (`bars()` grew an optional
+  formatter for ₪ values).
+- Tests: `_vpayments.mjs` (port 8795) — 16 checks: the five delta rules, P&L seed+follow,
+  NULL-remaining derivation, global ledger/متأخرات membership, drawer record/delete with
+  in-place field refresh, finance sections, click-throughs, no console errors.
+  Screenshots `docs/styleframes/vpayments-*.png` (desktop + phone).
+- Deployed 94815d5c; probes: site 200, /office + API 302 behind Access as expected.
+- **Receipts next step** (when the owner says go): Invoice4U worker endpoint issuing a
+  קבלה per recorded payment (document type 2, `ApiIdentifier = sarab-pay-<id>`, Errors
+  array checked despite HTTP 200), key in a Pages secret, doc columns + retry state
+  already waiting in the ledger and the panel. Check in the Invoice4U account first:
+  the plan's document quota, and the exact type of the two hand-made receipts.

@@ -76,6 +76,32 @@ CREATE TABLE IF NOT EXISTS event_finances (
   extra          TEXT
 );
 
+-- سجل المدفوعات (2026-08-11): one row per payment received on a booking. The stored
+-- bookings.deposit / bookings.remaining and event_finances.paid keep working as before —
+-- recording a payment updates them by exact deltas (see functions/office/api/payments.js).
+-- doc_* columns sit empty until the Invoice4U receipt automation is switched on
+-- (עסק זעיר → קבלה only; plan in the docs/05 progress log).
+CREATE TABLE IF NOT EXISTS payments (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_id     INTEGER NOT NULL,     -- bookings.id
+  amount         REAL NOT NULL,        -- ₪ received
+  kind           TEXT,                 -- عربون | دفعة
+  method         TEXT,                 -- طريقة الدفع (options kind=payment_method)
+  paid_on        TEXT,                 -- date received (YYYY-MM-DD)
+  note           TEXT,
+  source         TEXT NOT NULL DEFAULT 'office',  -- office | backfill
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  doc_type       TEXT,                 -- קבלה — receipt document, future automation
+  doc_number     TEXT,
+  doc_url        TEXT,
+  doc_status     TEXT,                 -- pending | issued | failed
+  doc_error      TEXT,
+  api_identifier TEXT,                 -- idempotency key (sarab-pay-<id>)
+  issued_at      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
+CREATE INDEX IF NOT EXISTS idx_payments_paid_on ON payments(paid_on);
+
 -- مصاريف عامة (general expense ledger)
 CREATE TABLE IF NOT EXISTS general_expenses (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -115,6 +115,18 @@
   }
   .drawer footer .meta{color:var(--muted); font-size:.72rem; margin-inline-start:auto; text-align:end}
 
+  /* سجل المدفوعات — the drawer's payment history + record form */
+  .paybox{background:rgba(134,185,138,.05); border:1px solid var(--line); border-radius:10px; padding:.7rem .8rem; display:grid; gap:.5rem}
+  .payhead{display:flex; justify-content:space-between; align-items:baseline; gap:.6rem; flex-wrap:wrap}
+  .payhead b{color:var(--gold)}
+  .payrow{display:flex; gap:.55rem; align-items:baseline; flex-wrap:wrap; font-size:.86rem; border-bottom:1px dashed rgba(201,162,78,.16); padding-bottom:.35rem}
+  .payrow>b{margin-inline-start:auto; font-variant-numeric:tabular-nums}
+  .paynote{flex-basis:100%; font-size:.74rem}
+  .paydel{background:none; border:none; color:var(--warn); font-size:.85rem; padding:0 .15rem}
+  .paydel:hover{filter:brightness(1.2)}
+  .payform{display:grid; grid-template-columns:1fr 1fr; gap:.45rem}
+  .payform #p_note, .payform .btn{grid-column:1 / -1}
+
   /* pricing manager + drawer intel */
   .pricing{display:grid; gap:1rem}
   .pricing table{min-width:0; width:100%}
@@ -724,13 +736,21 @@ function wireEditors(tablebox, def, send) {
 }
 
 let FIN = null;
+let PAY = null;   // /office/api/payments global view — ledger, Σ by month/method, متأخرات
 const sumCol = (rows, k) => rows.reduce((s, r) => s + (Number(r[k]) || 0), 0);
-async function loadFinance() { FIN = await api('/office/api/finance'); renderFinance(); }
+async function loadFinance() {
+  [FIN, PAY] = await Promise.all([api('/office/api/finance'), api('/office/api/payments')]);
+  renderFinance();
+}
 function renderFinance() {
   const k = FIN.kpi;
   const adv = FIN.advances || [];
   // Completed events the P&L list doesn't hold yet — the owner would be calculating without them.
   const miss = FIN.missing || [];
+  // From the payments ledger: متأخرات (events held, money still owed) + the log itself.
+  const od = (PAY && PAY.overdue) || [];
+  const payRows = (PAY && PAY.rows) || [];
+  const payMonth = (m) => AR_MONTHS[Number(m.slice(5, 7)) - 1] + ' ' + m.slice(0, 4);
   // Same rule the server seeds a row with: a completed event has collected its price minus any
   // balance still outstanding; with no price recorded, fall back to the deposit we do know.
   const collected = (m) => (m.price != null
@@ -748,6 +768,7 @@ function renderFinance() {
     <section class="kpis" style="padding:0">
       <div class="kpi"><b>${money(k.revenue)}</b><span>إيرادات متوقعة (أسعار الحجوزات)</span></div>
       <div class="kpi gold"><b>${money(received)}</b><span>محصّل فعلياً (مدفوعات + عرابين)</span></div>
+      ${PAY ? `<div class="kpi"><b>${money(PAY.kpi.month_now)}</b><span>محصّل هذا الشهر (سجل المدفوعات)</span></div>` : ''}
       <div class="kpi"><b>${money((k.ev_expenses || 0) + (k.gen_expenses || 0))}</b><span>إجمالي المصاريف</span></div>
       <div class="kpi gold"><b class="${net >= 0 ? 'pos' : 'neg'}">${money(net)}</b><span>صافي الدخل (من المحصّل فعلياً)</span></div>
     </section>
@@ -774,6 +795,25 @@ function renderFinance() {
         <td class="num">${money(advDue)}</td><td></td></tr></tfoot>` : ''}
     </table>
     <div class="addrow"><span class="muted" style="font-size:.8rem">حجوزات دفعت عربوناً ولم تُنجز بعد (مؤكدة أو بانتظار التأكيد — الحالة مبيّنة لكل سطر) — للاطّلاع فقط (تُدار من تبويب الحجوزات)</span></div></div>
+
+    ${od.length ? `<div class="tablebox" id="finod">
+      <div class="verdict taken" style="margin:0">⏰ متأخرات — مناسبات أُقيمت وما زال عليها متبقٍ
+        <small>اضغط على السطر لفتح الحجز وتسجيل الدفعة عند استلامها</small></div>
+      <table>
+        <thead><tr><th>تاريخ المناسبة</th><th>الرقم</th><th>العميل</th><th>الهاتف</th><th>الحالة</th><th>السعر</th><th>المتبقي</th></tr></thead>
+        <tbody>${od.map((r) => `<tr data-open="${r.id}" style="cursor:pointer">
+          <td class="num">${dmy(r.event_date)}</td>
+          <td class="num muted">${esc(r.booking_no || '#' + r.id)}</td>
+          <td><b>${esc(fullName(r))}</b></td>
+          <td class="num">${esc(r.phone || '—')}</td>
+          <td>${badge(r.status)}</td>
+          <td class="num">${money(r.price)}</td>
+          <td class="num neg"><b>${money(r.remaining)}</b></td>
+        </tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="6">المجموع (${od.length})</td>
+          <td class="num neg">${money(sumCol(od, 'remaining'))}</td></tr></tfoot>
+      </table>
+    </div>` : ''}
 
     ${miss.length ? `<div class="tablebox" id="finmiss">
       <div class="verdict taken" style="margin:0">⚠ مناسبات مكتملة غير مُدرجة في الأرباح والمصاريف
@@ -826,7 +866,25 @@ function renderFinance() {
         <td class="num neg">${money(sumCol(FIN.general, 'amount'))}</td>
         <td colspan="2"></td></tr></tfoot>` : ''}
     </table>
-    <div class="addrow"><span class="muted" style="font-size:.8rem">المصاريف العامة</span><button class="btn btn--sm fadd">+ إضافة مصروف</button></div></div>`;
+    <div class="addrow"><span class="muted" style="font-size:.8rem">المصاريف العامة</span><button class="btn btn--sm fadd">+ إضافة مصروف</button></div></div>
+
+    ${PAY ? `<div class="finhead"><b>💳 سجل المدفوعات</b><span class="muted">كل دفعة مقبوضة، بتاريخها وطريقتها — تُسجَّل من نافذة الحجز (زر «سجّل دفعة») · إجمالي مسجّل <b class="pos">${money(PAY.kpi.total)}</b>${payRows.length >= 120 ? ' · آخر 120 دفعة معروضة' : ''}</span></div>
+    <div class="tablebox" id="finpay"><table>
+      <thead><tr><th>التاريخ</th><th>الرقم</th><th>العميل</th><th>النوع</th><th>الطريقة</th><th>المبلغ</th><th>ملاحظة</th></tr></thead>
+      <tbody>${payRows.map((p) => `<tr data-open="${p.booking_id}" style="cursor:pointer">
+        <td class="num">${dmy(p.paid_on)}</td>
+        <td class="num muted">${esc(p.booking_no || '#' + p.booking_id)}</td>
+        <td><b>${esc(fullName(p))}</b></td>
+        <td>${esc(p.kind || '—')}</td>
+        <td>${esc(p.method || '—')}</td>
+        <td class="num ${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</td>
+        <td class="muted" style="white-space:normal;font-size:.78rem">${esc(p.note || '')}</td>
+      </tr>`).join('') || '<tr><td colspan="7"><div class="empty">لا مدفوعات مسجّلة بعد — افتح حجزاً واضغط «سجّل دفعة»</div></td></tr>'}</tbody>
+    </table>
+    <div class="addrow"><span class="muted" style="font-size:.8rem">السطور المرحّلة تلقائياً من حقول العربون القديمة تحمل تواريخ تقريبية — من اليوم فصاعداً كل دفعة بتاريخها الحقيقي</span></div></div>
+
+    ${bars('💵 المقبوضات بالشهر — نقد فعلي داخل (سجل المدفوعات)', (PAY.byMonth || []).slice(-14).map((m) => ({ k: payMonth(m.k), n: m.s })), money)}
+    ${bars('طرق الدفع — بأي وسيلة يصلنا المال؟', (PAY.byMethod || []).map((m) => ({ k: `${m.k} (${m.n})`, n: m.s })), money)}` : ''}`;
 
   const send = (table) => (method, body) =>
     api('/office/api/finance', { method, body: JSON.stringify({ table, ...body }) })
@@ -840,6 +898,8 @@ function renderFinance() {
     btn.disabled = true;
     send('event')('POST', { from_booking: Number(btn.dataset.id) });
   });
+  // متأخرات and سجل المدفوعات rows open the booking's drawer — the دفعة is recorded there.
+  $$('tr[data-open]', box).forEach((r) => r.onclick = () => openDrawerById(Number(r.dataset.open)));
 }
 
 let INV = null;
@@ -1094,10 +1154,10 @@ function renderInsights() {
 
 // ---------- visitors (analytics) & Meta CAPI ----------
 
-function bars(title, rows) {
+function bars(title, rows, fmt = (n) => n) {
   const max = Math.max(1, ...rows.map((r) => r.n));
   return `<div class="tablebox statbox"><b>${title}</b>
-    ${rows.map((r) => `<div class="bar"><span>${esc(String(r.k))}</span><i style="width:${(r.n / max * 100).toFixed(0)}%"></i><b>${r.n}</b></div>`).join('')
+    ${rows.map((r) => `<div class="bar"><span>${esc(String(r.k))}</span><i style="width:${Math.max(0, r.n / max * 100).toFixed(0)}%"></i><b>${fmt(r.n)}</b></div>`).join('')
       || '<div class="empty">لا بيانات بعد</div>'}</div>`;
 }
 
@@ -1576,6 +1636,107 @@ async function loadIntel() {
   };
 }
 
+// ---------- 💳 سجل المدفوعات (drawer panel) ----------
+// Payments are their own records, saved the moment سجّل دفعة is pressed — independent
+// of the drawer's حفظ. The server moves العربون/المتبقي (and the event's P&L row) by the
+// exact amount; the fresh values land straight back in the open form so what the owner
+// sees is always what is stored.
+const PAY_KINDS = ['عربون', 'دفعة'];
+
+async function loadPayments(bookingId) {
+  try {
+    const r = await api('/office/api/payments?booking=' + bookingId);
+    renderPayments(bookingId, r.payments);
+  } catch (e) {
+    const box = $('#paybox');
+    if (box && e.message !== 'unauthorized') box.innerHTML = '<span class="muted">تعذّر تحميل المدفوعات — أعد فتح الحجز</span>';
+  }
+}
+
+function renderPayments(bookingId, list) {
+  const box = $('#paybox');
+  if (!box || state.editing !== bookingId) return;
+  const total = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  state.payTotal = list.length ? total : null;
+  const methods = state.meta.options.payment_method || [];
+  const st = $('#f_status') ? $('#f_status').value : '';
+  const hint = list.length && (st === 'استفسار' || st === 'عرض سعر')
+    ? '<div class="muted" style="font-size:.76rem">💡 وصلت دفعة والحالة ما زالت «' + esc(st) + '» — غيّرها إلى «دفع العربون» أو «مؤكد» ثم احفظ</div>' : '';
+  box.innerHTML = `
+    <div class="payhead"><b>💳 المدفوعات</b><span class="muted">${
+      list.length ? `${list.length} دفعة · المجموع <b class="pos">${money(total)}</b>` : 'لا دفعات مسجّلة بعد'}</span></div>
+    ${list.map((p) => `<div class="payrow">
+      <span class="num muted">${dmy(p.paid_on)}</span>
+      <span>${esc(p.kind || 'دفعة')}${p.method ? ` · ${esc(p.method)}` : ''}</span>
+      <b class="${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</b>
+      ${p.doc_number ? `<span class="muted num" title="مستند صادر">🧾 ${esc(p.doc_number)}</span>` : ''}
+      <button class="paydel" data-id="${p.id}" title="حذف الدفعة">✕</button>
+      ${p.note ? `<span class="muted paynote">${esc(p.note)}</span>` : ''}
+    </div>`).join('')}
+    <div class="payform">
+      <input id="p_amount" type="number" step="any" inputmode="decimal" placeholder="المبلغ ₪">
+      <select id="p_kind" title="عربون يُضاف لحقل العربون — دفعة تُنقص المتبقي فقط">${
+        PAY_KINDS.map((k) => `<option${(list.length ? k === 'دفعة' : k === 'عربون') ? ' selected' : ''}>${k}</option>`).join('')}</select>
+      <select id="p_method"><option value="">طريقة الدفع…</option>${methods.map((m) => `<option>${esc(m)}</option>`).join('')}</select>
+      <input id="p_date" type="date" value="${localISO()}">
+      <input id="p_note" placeholder="ملاحظة (اختياري)">
+      <button type="button" class="btn btn--sm" id="payAdd">💳 سجّل دفعة</button>
+    </div>
+    ${hint}`;
+
+  $('#payAdd').onclick = async () => {
+    const amount = parseFloat($('#p_amount').value);
+    if (!Number.isFinite(amount) || amount === 0) { toast('اكتب مبلغ الدفعة أولاً', true); return; }
+    const btn = $('#payAdd');
+    btn.disabled = true;
+    try {
+      const r = await api('/office/api/payments', { method: 'POST', body: JSON.stringify({
+        booking_id: bookingId, amount,
+        kind: $('#p_kind').value, method: $('#p_method').value,
+        paid_on: $('#p_date').value, note: $('#p_note').value,
+      }) });
+      afterPayMutation(bookingId, r);
+      toast('سُجّلت الدفعة ✓ — حُدّث العربون والمتبقي');
+    } catch (e) {
+      if (e.message !== 'unauthorized') toast('لم تُسجّل الدفعة — تحقق من القيم', true);
+      btn.disabled = false;
+    }
+  };
+  $$('.paydel', box).forEach((el) => el.onclick = async () => {
+    const p = list.find((x) => x.id === Number(el.dataset.id));
+    if (!p || !confirm(`حذف دفعة ${money(p.amount)}؟ سيعود المبلغ إلى المتبقي.`)) return;
+    try {
+      const r = await api('/office/api/payments', { method: 'DELETE', body: JSON.stringify({ id: p.id }) });
+      afterPayMutation(bookingId, r);
+      toast('حُذفت الدفعة ✓');
+    } catch (e) {
+      if (e.message !== 'unauthorized') {
+        toast(e.message === 'has-document' ? 'عليها إيصال رسمي صادر — لا تُحذف من هنا' : 'لم تُحذف', true);
+      }
+    }
+  });
+}
+
+// The server already moved العربون/المتبقي (and the P&L row) — pull the fresh booking
+// into the open form, the cached grid row, and the header KPIs, then re-list.
+function afterPayMutation(bookingId, r) {
+  if (r.booking) {
+    const i = state.rows.findIndex((x) => x.id === bookingId);
+    if (i !== -1) state.rows[i] = r.booking;
+    if (state.editing === bookingId) {
+      for (const k of ['deposit', 'remaining']) {
+        const el = $('#f_' + k);
+        if (el) el.value = r.booking[k] ?? '';
+      }
+      state.remainTouched = false;
+    }
+    if (state.tab === 'bookings' || state.tab === 'callback') renderRows();
+    if (state.tab === 'finance') loadFinance().catch(() => {});
+  }
+  renderPayments(bookingId, r.payments);
+  loadMeta().catch(() => {});
+}
+
 // Open the editor for any booking id, even one not in the loaded grid rows (the
 // واتساب tab edits bookings that may be outside the current filter/limit).
 async function openDrawerById(id) {
@@ -1595,8 +1756,16 @@ function openDrawer(id, presetDate) {
   state.editing = row ? row.id : null;
   state.remainTouched = false;
   state.staffTouched = false;
+  state.payTotal = null;
   $('#dTitle').textContent = row ? `${row.booking_no || '#' + row.id} — ${fullName(row)}` : 'حجز جديد';
-  $('#dBody').innerHTML = '<div class="field full intel" id="intel" style="display:none"></div>' + F.map(fieldHtml).join('');
+  // سجل المدفوعات sits right below حالة الدفع — history + the سجّل دفعة form. Only for a
+  // saved booking: a payment is a real record and needs a booking row to hang on.
+  const PAY_AT = F.findIndex(([k]) => k === 'payment_status') + 1;
+  $('#dBody').innerHTML = '<div class="field full intel" id="intel" style="display:none"></div>'
+    + F.slice(0, PAY_AT).map(fieldHtml).join('')
+    + (row ? '<div class="field full paybox" id="paybox"><span class="muted">💳 جارٍ تحميل المدفوعات…</span></div>' : '')
+    + F.slice(PAY_AT).map(fieldHtml).join('');
+  if (row) loadPayments(row.id);
   for (const [key,, kind] of F) {
     const el = $('#f_' + key);
     const v = row ? row[key]
@@ -1627,12 +1796,17 @@ function openDrawer(id, presetDate) {
     });
   }
   // remaining auto-recalcs from price − deposit (new AND existing bookings);
-  // a manual edit of remaining wins for the rest of this drawer session
+  // a manual edit of remaining wins for the rest of this drawer session.
+  // Once the booking has ledger payments, the ledger is the truer source: remaining
+  // follows price − Σ المدفوعات, and editing العربون alone stops recomputing it
+  // (an عربون beyond the ledger belongs in سجّل دفعة, not typed over the sum).
   $('#f_remaining').addEventListener('input', () => state.remainTouched = true);
   for (const k of ['price', 'deposit']) $('#f_' + k).addEventListener('input', () => {
     if (state.remainTouched) return;
-    const p = parseFloat($('#f_price').value), d = parseFloat($('#f_deposit').value) || 0;
-    if (Number.isFinite(p)) $('#f_remaining').value = p - d;
+    const p = parseFloat($('#f_price').value);
+    if (!Number.isFinite(p)) return;
+    if (state.payTotal != null) { if (k === 'price') $('#f_remaining').value = p - state.payTotal; return; }
+    $('#f_remaining').value = p - (parseFloat($('#f_deposit').value) || 0);
   });
   // عدد العمال follows the names written in الطاقم (one per separator) — same idiom as
   // المتبقي following السعر − العربون: a manual edit of the count wins from then on.
