@@ -89,6 +89,8 @@ CREATE TABLE IF NOT EXISTS payments (
   method         TEXT,                 -- طريقة الدفع (options kind=payment_method)
   paid_on        TEXT,                 -- date received (YYYY-MM-DD)
   note           TEXT,
+  payer          TEXT,                 -- اسم الدافع when not the booking's client (2026-08-12)
+  method_ref     TEXT,                 -- مرجع الدفع: bank account / transfer ref / check no.
   source         TEXT NOT NULL DEFAULT 'office',  -- office | backfill
   created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
   doc_type       TEXT,                 -- קבלה — receipt document, future automation

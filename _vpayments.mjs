@@ -37,6 +37,11 @@ try {
   r = await send('/office/api/payments', { booking_id: A.id, amount: 700, kind: 'دفعة', method: 'نقداً', paid_on: '2026-08-11' })
   results.payKeepsDeposit = near(r.booking.deposit, 500) && near(r.booking.remaining, 800)
   const payPay = r.payments.find((p) => p.id !== payAdv).id
+  // 2b) PATCH payer + method_ref only: stored and echoed, NO delta applied (2026-08-12).
+  r = await send('/office/api/payments', { id: payPay, payer: 'والد العريس', method_ref: 'حوالة 12345' }, 'PATCH')
+  const pp = r.payments.find((p) => p.id === payPay)
+  results.payerStored = pp.payer === 'والد العريس' && pp.method_ref === 'حوالة 12345'
+    && near(r.booking.deposit, 500) && near(r.booking.remaining, 800)
   // 3) PATCH amount 700→800: remaining 800→700.
   r = await send('/office/api/payments', { id: payPay, amount: 800 }, 'PATCH')
   results.patchAmount = near(r.booking.deposit, 500) && near(r.booking.remaining, 700)
@@ -64,6 +69,16 @@ try {
   results.globalLedger = g.rows.some((p) => p.booking_id === A.id) && g.byMethod.length >= 2
     && g.byMonth.some((m) => m.k === '2026-08')
   results.overdueList = g.overdue.some((o) => o.name === 'دفعات ب') && !g.overdue.some((o) => o.id === A.id)
+  results.globalMatched = g.matched && g.matched.n >= g.rows.length
+
+  // 8) Ledger filters (2026-08-12): q matches the payer, method and kind narrow exactly.
+  const gq = await get('/office/api/payments?q=' + encodeURIComponent('والد العريس'))
+  results.filterQ = gq.rows.length >= 1 && gq.rows.every((p) => (p.payer || '').includes('والد'))
+    && gq.matched.n === gq.rows.length
+  const gm = await get('/office/api/payments?method=' + encodeURIComponent('تحويل بنكي'))
+  results.filterMethod = gm.rows.length >= 1 && gm.rows.every((p) => p.method === 'تحويل بنكي')
+  const gk2 = await get('/office/api/payments?kind=' + encodeURIComponent('عربون'))
+  results.filterKind = gk2.rows.length >= 1 && gk2.rows.every((p) => p.kind === 'عربون')
 
   // --- UI ---
   browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] })
@@ -84,14 +99,22 @@ try {
   results.drawerLists = (await page.locator('#paybox .payrow').count()) === 2
     && (await page.locator('#paybox .payhead').textContent()).includes('2,000')
 
-  // Record 150 via the form → row count 3, العربون/المتبقي inputs move (800 stays, −150).
+  // مرجع الدفع hint follows the method (bank transfer wants the payer's account/ref).
+  await page.selectOption('#p_method', 'تحويل بنكي')
+  results.refHint = (await page.getAttribute('#p_ref', 'placeholder')).includes('حساب')
+
+  // Record 150 via the form → row count 3, العربون/المتبقي inputs move (800 stays, −150),
+  // and the payer typed into اسم الدافع shows on the new row.
   await page.fill('#p_amount', '150')
   await page.selectOption('#p_kind', 'دفعة')
   await page.selectOption('#p_method', 'Bit')
+  await page.fill('#p_payer', 'عمة العروس')
+  await page.fill('#p_ref', 'ביט 052')
   await page.click('#payAdd')
   await page.waitForFunction(() => document.querySelectorAll('#paybox .payrow').length === 3)
   results.uiRecord = (await page.inputValue('#f_deposit')) === '800'
     && (await page.inputValue('#f_remaining')) === '-150'
+  results.uiPayerShown = (await page.locator('#paybox .payrow', { hasText: 'عمة العروس' }).count()) === 1
   // Delete that row (newest = last) → back to 2 rows, المتبقي back to 0.
   await page.locator('#paybox .payrow .paydel').last().click()
   await page.waitForFunction(() => document.querySelectorAll('#paybox .payrow').length === 2)
@@ -106,6 +129,24 @@ try {
   results.finOverdue = (await page.locator('#finod tbody tr', { hasText: 'دفعات ب' }).count()) === 1
   results.finBars = (await page.locator('#finance .statbox', { hasText: 'المقبوضات بالشهر' }).count()) === 1
     && (await page.locator('#finance .statbox', { hasText: 'طرق الدفع' }).count()) === 1
+
+  // 2026-08-12 — the reorganized tab: السنوات مالياً + الأشهر tables render inside open
+  // sections; the ledger search narrows the rows to the matching client only.
+  results.finYears = (await page.locator('#finyears tbody tr').count()) >= 1
+    && (await page.getAttribute('details[data-sec="fin_years"]', 'open')) !== null
+  results.finMonths = (await page.locator('#finmonths tbody tr').count()) >= 1
+  results.secClosed = (await page.getAttribute('details[data-sec="fin_ev"]', 'open')) === null
+  await page.fill('#plq', 'دفعات أ')
+  await page.waitForFunction(() => {
+    const rows = [...document.querySelectorAll('#plrows tr[data-open]')]
+    return rows.length >= 2 && rows.every((r) => r.textContent.includes('دفعات أ'))
+  }, null, { timeout: 10000 })
+  results.ledgerFilter = true
+  // the payer recorded in the drawer travels to the ledger row
+  results.ledgerPayer = (await page.locator('#plrows tr', { hasText: 'والد العريس' }).count()) >= 1
+  await page.fill('#plq', '')
+  await page.waitForFunction(() =>
+    document.querySelectorAll('#plrows tr[data-open]').length >= 2, null, { timeout: 10000 })
   // المتأخرات row opens the drawer on ب.
   await page.locator('#finod tbody tr', { hasText: 'دفعات ب' }).click()
   await page.waitForSelector('.drawer.open #paybox', { timeout: 10000 })

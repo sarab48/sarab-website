@@ -157,6 +157,32 @@
   .dateflag--soft{color:#E8C377}
   .dateflag--soft::before{content:'◔ '}
 
+  /* ---------- collapsible sections (المالية + التحليلات) ----------
+     The long tables only get longer with time; each lives in a <details> whose summary
+     carries the bottom line (count + totals), so a closed section still answers the
+     question and opening it is for the detail. Open/closed is remembered per section. */
+  details.sec{border:1px solid var(--line); border-radius:var(--r); background:var(--panel); overflow:hidden}
+  details.sec>summary{
+    list-style:none; cursor:pointer; user-select:none;
+    display:flex; gap:.7rem; align-items:baseline; flex-wrap:wrap;
+    padding:.62rem .9rem; background:var(--panel-2);
+  }
+  details.sec>summary::-webkit-details-marker{display:none}
+  details.sec>summary>b{color:var(--gold); font-size:.95rem}
+  details.sec>summary .sechead{color:var(--muted); font-size:.82rem}
+  details.sec>summary .sechead b{color:var(--ivory); font-size:.84rem}
+  details.sec>summary .chev{margin-inline-start:auto; color:var(--muted); font-size:.8rem; transition:transform .15s}
+  details.sec[open]>summary{border-bottom:1px solid var(--line)}
+  details.sec[open]>summary .chev{transform:rotate(180deg)}
+  details.sec>summary:hover>b{filter:brightness(1.15)}
+  /* nested tableboxes lose their own frame — the section already draws one */
+  details.sec .secbody>.tablebox{border:none; border-radius:0}
+  details.sec .secbody>.statbox{border:none; border-radius:0}
+  details.sec .secbody .filters{padding:.6rem .8rem; border-bottom:1px solid var(--line)}
+  details.sec .secbody .filters select{width:auto}
+  details.sec .secbody .filters .search{max-width:230px}
+  .secnote{padding:.45rem .8rem; color:var(--muted); font-size:.78rem}
+
   /* totals row at the bottom of finance tables */
   tfoot td{
     border-top:2px solid rgba(201,162,78,.4); border-bottom:none;
@@ -479,6 +505,26 @@ function toast(msg, err=false) {
 
 // ---------- rendering ----------
 
+// Collapsible section: the summary line carries the bottom line (count + totals) so a
+// closed section still answers the question. Open/closed is remembered per section key;
+// `defOpen` only decides the very first time.
+function sec(key, title, head, body, defOpen = false) {
+  let open = defOpen;
+  try {
+    const saved = localStorage.getItem('sec_' + key);
+    if (saved !== null) open = saved === '1';
+  } catch {}
+  return `<details class="sec" data-sec="${key}"${open ? ' open' : ''}>
+    <summary><b>${title}</b><span class="sechead">${head}</span><span class="chev">▼</span></summary>
+    <div class="secbody">${body}</div>
+  </details>`;
+}
+function wireSecs(box) {
+  $$('details.sec', box).forEach((d) => d.addEventListener('toggle', () => {
+    try { localStorage.setItem('sec_' + d.dataset.sec, d.open ? '1' : '0'); } catch {}
+  }));
+}
+
 function renderKpis() {
   const k = state.meta.kpi;
   $('#kpis').innerHTML = `
@@ -737,11 +783,60 @@ function wireEditors(tablebox, def, send) {
 
 let FIN = null;
 let PAY = null;   // /office/api/payments global view — ledger, Σ by month/method, متأخرات
+let PAYL = null;  // the ledger list under the current filters (rows + matched count/Σ)
+const payF = { q: '', kind: '', method: '', month: '' };
+let finMonthYear = null;  // الأشهر table scope; null = first visit → the current year
 const sumCol = (rows, k) => rows.reduce((s, r) => s + (Number(r[k]) || 0), 0);
+
+const hasPayFilters = () => !!(payF.q || payF.kind || payF.method || payF.month);
+function fetchPayLedger() {
+  const p = new URLSearchParams();
+  for (const k of ['q', 'kind', 'method', 'month']) if (payF[k]) p.set(k, payF[k]);
+  const qs = p.toString();
+  return api('/office/api/payments' + (qs ? '?' + qs : ''));
+}
+
 async function loadFinance() {
   [FIN, PAY] = await Promise.all([api('/office/api/finance'), api('/office/api/payments')]);
+  PAYL = hasPayFilters() ? await fetchPayLedger() : PAY;
   renderFinance();
 }
+
+const finMonthName = (m) => AR_MONTHS[Number(m.slice(5, 7)) - 1] + ' ' + m.slice(0, 4);
+
+// One ledger row. الدافع sits under the client and the مرجع under the method — the info
+// is visible without two more columns pushing the table into horizontal scroll.
+const payRowHtml = (p) => `<tr data-open="${p.booking_id}" style="cursor:pointer">
+  <td class="num">${dmy(p.paid_on)}</td>
+  <td class="num muted">${esc(p.booking_no || '#' + p.booking_id)}</td>
+  <td><b>${esc(fullName(p))}</b>${p.payer ? `<div class="muted" style="font-size:.72rem">👤 الدافع: ${esc(p.payer)}</div>` : ''}</td>
+  <td>${esc(p.kind || '—')}</td>
+  <td>${esc(p.method || '—')}${p.method_ref ? `<div class="muted" style="font-size:.72rem">${esc(p.method_ref)}</div>` : ''}</td>
+  <td class="num ${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</td>
+  <td class="muted" style="white-space:normal;font-size:.78rem">${esc(p.note || '')}</td>
+</tr>`;
+
+// Fill (or re-fill) only the ledger's rows + count — typing in its search box must not
+// re-render the tab out from under the keyboard.
+function renderPayRows() {
+  const tb = $('#plrows');
+  if (!tb) return;
+  const rows = (PAYL && PAYL.rows) || [];
+  tb.innerHTML = rows.map(payRowHtml).join('')
+    || `<tr><td colspan="7"><div class="empty">${hasPayFilters()
+        ? 'لا دفعات مطابقة لهذه التصفية' : 'لا مدفوعات مسجّلة بعد — افتح حجزاً واضغط «سجّل دفعة»'}</div></td></tr>`;
+  $$('tr[data-open]', tb).forEach((r) => r.onclick = () => openDrawerById(Number(r.dataset.open)));
+  const m = PAYL && PAYL.matched;
+  const el = $('#plcount');
+  if (el && m) el.textContent = (m.n > rows.length ? `معروض ${rows.length} من ${m.n}` : `${m.n} دفعة`)
+    + ` · المجموع ${money(m.s)}`;
+}
+
+async function loadPayLedger() {
+  try { PAYL = await fetchPayLedger(); renderPayRows(); }
+  catch (e) { if (e.message !== 'unauthorized') toast('تعذّرت تصفية السجل', true); }
+}
+
 function renderFinance() {
   const k = FIN.kpi;
   const adv = FIN.advances || [];
@@ -749,8 +844,6 @@ function renderFinance() {
   const miss = FIN.missing || [];
   // From the payments ledger: متأخرات (events held, money still owed) + the log itself.
   const od = (PAY && PAY.overdue) || [];
-  const payRows = (PAY && PAY.rows) || [];
-  const payMonth = (m) => AR_MONTHS[Number(m.slice(5, 7)) - 1] + ' ' + m.slice(0, 4);
   // Same rule the server seeds a row with: a completed event has collected its price minus any
   // balance still outstanding; with no price recorded, fall back to the deposit we do know.
   const collected = (m) => (m.price != null
@@ -763,6 +856,87 @@ function renderFinance() {
   const received = (k.ev_paid || 0) + advIn;
   const net = received - (k.ev_expenses || 0) - (k.gen_expenses || 0);
   const evNet = sumCol(FIN.events, 'net_profit');
+
+  // السنوات — مالياً: the owner's headline table.
+  const years = FIN.byYear || [];
+  const thisYear = localISO().slice(0, 4);
+  const yNow = years.find((y) => y.k === thisYear);
+  const yHead = yNow
+    ? `${thisYear}: <b>${yNow.n}</b> حجزاً · محصّل <b>${money(yNow.collected)}</b> من <b>${money(yNow.expected)}</b>`
+    : years.length ? `${sumCol(years, 'n')} حجزاً مؤكداً · محصّل ${money(sumCol(years, 'collected'))}` : 'لا حجوزات مؤكدة بعد';
+  const yearsBody = `<div class="tablebox" id="finyears"><table style="min-width:0">
+      <thead><tr><th>السنة</th><th>حجوزات مؤكدة</th><th>قادمة</th><th>إيرادات متوقعة</th><th>محصّل فعلياً</th><th>متبقٍ للتحصيل</th><th>عربون (منفصل)</th></tr></thead>
+      <tbody>${years.map((y) => `<tr>
+        <td><b>${esc(y.k)}</b></td>
+        <td class="num">${y.n}</td>
+        <td class="num">${y.upcoming || '—'}</td>
+        <td class="num">${money(y.expected)}</td>
+        <td class="num pos">${money(y.collected)}</td>
+        <td class="num${Number(y.due) > 0 ? ' neg' : ''}">${money(y.due)}</td>
+        <td class="num muted">${y.dep_n ? `${y.dep_n} · ${money(y.dep_paid)}` : '—'}</td>
+      </tr>`).join('') || '<tr><td colspan="7"><div class="empty">لا حجوزات مؤكدة بعد</div></td></tr>'}</tbody>
+      ${years.length > 1 ? `<tfoot><tr><td>المجموع</td>
+        <td class="num">${sumCol(years, 'n')}</td>
+        <td class="num">${sumCol(years, 'upcoming')}</td>
+        <td class="num">${money(sumCol(years, 'expected'))}</td>
+        <td class="num pos">${money(sumCol(years, 'collected'))}</td>
+        <td class="num">${money(sumCol(years, 'due'))}</td>
+        <td class="num muted">${sumCol(years, 'dep_n')} · ${money(sumCol(years, 'dep_paid'))}</td></tr></tfoot>` : ''}
+    </table>
+    <div class="secnote">مؤكد / مكتمل فقط، حسب سنة المناسبة · «محصّل فعلياً» = السعر − المتبقي لكل حجز · دفع العربون معدود على حدة: العدد · المقبوض منه</div></div>`;
+
+  // الأشهر: cash received, expenses, net and events held — per month, scoped by year chips.
+  const bm = FIN.byMonth || [];
+  const mYears = [...new Set(bm.map((m) => m.k.slice(0, 4)))].sort().reverse();
+  if (finMonthYear === null) finMonthYear = mYears.includes(thisYear) ? thisYear : '';
+  const bmShown = finMonthYear ? bm.filter((m) => m.k.startsWith(finMonthYear)) : bm;
+  const mLatest = bm[0];
+  const mHead = mLatest
+    ? `آخر شهر (${finMonthName(mLatest.k)}): مقبوضات <b>${money(mLatest.collected)}</b> · صافي <b>${money(mLatest.net)}</b>`
+    : 'لا مقبوضات مسجّلة بعد';
+  const monthsBody = `
+    ${mYears.length > 1 ? `<div class="chips" style="padding:.55rem .8rem 0">
+      <button class="chip${!finMonthYear ? ' on' : ''}" data-fmy="">كل السنوات</button>
+      ${mYears.map((y) => `<button class="chip${finMonthYear === y ? ' on' : ''}" data-fmy="${y}">${y}</button>`).join('')}
+    </div>` : ''}
+    <div class="tablebox" id="finmonths"><table style="min-width:0">
+      <thead><tr><th>الشهر</th><th>مناسبات أُقيمت/تُقام</th><th>المقبوضات</th><th>المصاريف</th><th>صافي الدخل</th></tr></thead>
+      <tbody>${bmShown.map((m) => `<tr>
+        <td><b>${finMonthName(m.k)}</b></td>
+        <td class="num">${m.events || '—'}</td>
+        <td class="num pos">${money(m.collected)}</td>
+        <td class="num${(m.ev_expenses + m.gen_expenses) > 0 ? ' neg' : ''}"
+            title="مصاريف مناسبات ${money(m.ev_expenses)} + مصاريف عامة ${money(m.gen_expenses)}">${money(m.ev_expenses + m.gen_expenses)}</td>
+        <td class="num ${m.net >= 0 ? 'pos' : 'neg'}"><b>${money(m.net)}</b></td>
+      </tr>`).join('') || '<tr><td colspan="5"><div class="empty">لا بيانات في هذه الفترة</div></td></tr>'}</tbody>
+      ${bmShown.length > 1 ? `<tfoot><tr><td>المجموع (${bmShown.length} شهر)</td>
+        <td class="num">${sumCol(bmShown, 'events')}</td>
+        <td class="num pos">${money(sumCol(bmShown, 'collected'))}</td>
+        <td class="num">${money(sumCol(bmShown, 'ev_expenses') + sumCol(bmShown, 'gen_expenses'))}</td>
+        <td class="num">${money(sumCol(bmShown, 'net'))}</td></tr></tfoot>` : ''}
+    </table>
+    <div class="secnote">المقبوضات = سجل المدفوعات بتاريخ القبض · المصاريف = مصاريف المناسبات (بشهر المناسبة) + المصاريف العامة (بتاريخها) · الصافي = المقبوضات − المصاريف · المناسبات = مؤكد/مكتمل بشهر المناسبة</div></div>`;
+
+  // سجل المدفوعات: filters + the log. The rows land via renderPayRows().
+  const methods = (state.meta && state.meta.options.payment_method) || [];
+  const payMonthsAll = (PAY && PAY.byMonth ? [...PAY.byMonth].map((m) => m.k) : []).sort().reverse();
+  const ledgerBody = `
+    <div class="filters">
+      <input class="search" id="plq" type="search" placeholder="بحث: عميل، دافع، رقم، مرجع…" value="${esc(payF.q)}">
+      <select id="plkind"><option value="">كل الأنواع</option>${PAY_KINDS.map((x) =>
+        `<option${payF.kind === x ? ' selected' : ''}>${x}</option>`).join('')}</select>
+      <select id="plmethod"><option value="">كل الطرق</option>${methods.map((x) =>
+        `<option${payF.method === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>
+      <select id="plmonth"><option value="">كل الشهور</option>${payMonthsAll.map((x) =>
+        `<option value="${x}"${payF.month === x ? ' selected' : ''}>${finMonthName(x)}</option>`).join('')}</select>
+      <span class="count" id="plcount"></span>
+    </div>
+    <div class="tablebox" id="finpay"><table>
+      <thead><tr><th>التاريخ</th><th>الرقم</th><th>العميل</th><th>النوع</th><th>الطريقة</th><th>المبلغ</th><th>ملاحظة</th></tr></thead>
+      <tbody id="plrows"></tbody>
+    </table>
+    <div class="secnote">كل دفعة تُسجَّل من نافذة الحجز (زر «سجّل دفعة») · السطور المرحّلة من حقول العربون القديمة تحمل تواريخ تقريبية · اضغط على سطر لفتح حجزه</div></div>`;
+
   const box = $('#finance');
   box.innerHTML = `
     <section class="kpis" style="padding:0">
@@ -772,29 +946,6 @@ function renderFinance() {
       <div class="kpi"><b>${money((k.ev_expenses || 0) + (k.gen_expenses || 0))}</b><span>إجمالي المصاريف</span></div>
       <div class="kpi gold"><b class="${net >= 0 ? 'pos' : 'neg'}">${money(net)}</b><span>صافي الدخل (من المحصّل فعلياً)</span></div>
     </section>
-
-    <div class="finhead">
-      <b>💰 عرابين محصّلة — حجوزات قادمة</b>
-      <span class="muted">محصّل مقدماً <b class="pos">${money(advIn)}</b> · متبقٍ للتحصيل <b>${money(advDue)}</b></span>
-    </div>
-    <div class="tablebox" id="finadv"><table>
-      <thead><tr><th>الرقم</th><th>العميل</th><th>التاريخ</th><th>المدينة</th><th>السعر الكامل</th><th>العربون المحصّل</th><th>المتبقي للتحصيل</th><th>الحالة</th></tr></thead>
-      <tbody>${adv.map((r) => `<tr>
-        <td class="num muted">${esc(r.booking_no || '—')}</td>
-        <td><b>${esc(r.client || '—')}</b></td>
-        <td class="num">${dmy(r.event_date)}</td>
-        <td>${esc(r.city || '—')}</td>
-        <td class="num">${money(r.price)}</td>
-        <td class="num pos">${money(r.deposit)}</td>
-        <td class="num">${money(r.remaining)}</td>
-        <td>${badge(r.status)}</td>
-      </tr>`).join('') || '<tr><td colspan="8"><div class="empty">لا عرابين محصّلة من حجوزات قادمة بعد</div></td></tr>'}</tbody>
-      ${adv.length ? `<tfoot><tr><td colspan="4">المجموع (${adv.length})</td>
-        <td class="num">${money(sumCol(adv, 'price'))}</td>
-        <td class="num pos">${money(advIn)}</td>
-        <td class="num">${money(advDue)}</td><td></td></tr></tfoot>` : ''}
-    </table>
-    <div class="addrow"><span class="muted" style="font-size:.8rem">حجوزات دفعت عربوناً ولم تُنجز بعد (مؤكدة أو بانتظار التأكيد — الحالة مبيّنة لكل سطر) — للاطّلاع فقط (تُدار من تبويب الحجوزات)</span></div></div>
 
     ${od.length ? `<div class="tablebox" id="finod">
       <div class="verdict taken" style="margin:0">⏰ متأخرات — مناسبات أُقيمت وما زال عليها متبقٍ
@@ -832,7 +983,35 @@ function renderFinance() {
       </table>
     </div>` : ''}
 
-    <div class="tablebox" id="finev"><table>
+    ${sec('fin_years', '📊 السنوات — مالياً', yHead, yearsBody, true)}
+    ${sec('fin_months', '🗓 الأشهر — المقبوضات وصافي الدخل', mHead, monthsBody, true)}
+    ${PAY ? sec('fin_pay', '💳 سجل المدفوعات',
+      `${PAY.kpi.n} دفعة · إجمالي مسجّل <b class="pos">${money(PAY.kpi.total)}</b> · هذا الشهر <b>${money(PAY.kpi.month_now)}</b>`,
+      ledgerBody, true) : ''}
+    ${sec('fin_adv', '💰 عرابين محصّلة — حجوزات قادمة',
+      `${adv.length} حجزاً · محصّل مقدماً <b class="pos">${money(advIn)}</b> · متبقٍ للتحصيل <b>${money(advDue)}</b>`,
+      `<div class="tablebox" id="finadv"><table>
+      <thead><tr><th>الرقم</th><th>العميل</th><th>التاريخ</th><th>المدينة</th><th>السعر الكامل</th><th>العربون المحصّل</th><th>المتبقي للتحصيل</th><th>الحالة</th></tr></thead>
+      <tbody>${adv.map((r) => `<tr>
+        <td class="num muted">${esc(r.booking_no || '—')}</td>
+        <td><b>${esc(r.client || '—')}</b></td>
+        <td class="num">${dmy(r.event_date)}</td>
+        <td>${esc(r.city || '—')}</td>
+        <td class="num">${money(r.price)}</td>
+        <td class="num pos">${money(r.deposit)}</td>
+        <td class="num">${money(r.remaining)}</td>
+        <td>${badge(r.status)}</td>
+      </tr>`).join('') || '<tr><td colspan="8"><div class="empty">لا عرابين محصّلة من حجوزات قادمة بعد</div></td></tr>'}</tbody>
+      ${adv.length ? `<tfoot><tr><td colspan="4">المجموع (${adv.length})</td>
+        <td class="num">${money(sumCol(adv, 'price'))}</td>
+        <td class="num pos">${money(advIn)}</td>
+        <td class="num">${money(advDue)}</td><td></td></tr></tfoot>` : ''}
+    </table>
+    <div class="secnote">حجوزات دفعت عربوناً ولم تُنجز بعد (مؤكدة أو بانتظار التأكيد — الحالة مبيّنة لكل سطر) — للاطّلاع فقط (تُدار من تبويب الحجوزات)</div></div>`)}
+
+    ${sec('fin_ev', '📒 أرباح ومصاريف المناسبات',
+      `${FIN.events.length} مناسبة · صافي <b class="${evNet >= 0 ? 'pos' : 'neg'}">${money(evNet)}</b>`,
+      `<div class="tablebox" id="finev"><table>
       <thead><tr><th>الرقم</th><th>العميل</th><th>المدينة</th><th>التاريخ</th><th>السعر</th><th>المدفوع</th><th>المصاريف</th><th>الصافي</th></tr></thead>
       <tbody>${FIN.events.map((e) => `<tr class="frow" data-obj='${esc(JSON.stringify(e))}'>
         <td class="num muted">${esc(e.booking_no || '—')}</td>
@@ -850,9 +1029,11 @@ function renderFinance() {
         <td class="num">${money(sumCol(FIN.events, 'total_expenses'))}</td>
         <td class="num ${evNet >= 0 ? 'pos' : 'neg'}">${money(evNet)}</td></tr></tfoot>` : ''}
     </table>
-    <div class="addrow"><span class="muted" style="font-size:.8rem">أرباح ومصاريف المناسبات — اضغط على سطر للتعديل، والمصاريف والصافي (المدفوع − المصاريف) يُحسبان تلقائياً</span><button class="btn btn--sm fadd">+ إضافة مناسبة</button></div></div>
+    <div class="addrow"><span class="muted" style="font-size:.8rem">اضغط على سطر للتعديل، والمصاريف والصافي (المدفوع − المصاريف) يُحسبان تلقائياً</span><button class="btn btn--sm fadd">+ إضافة مناسبة</button></div></div>`)}
 
-    <div class="tablebox" id="fingen"><table>
+    ${sec('fin_gen', '🧾 المصاريف العامة',
+      `${FIN.general.length} سطراً · المجموع <b class="neg">${money(sumCol(FIN.general, 'amount'))}</b>`,
+      `<div class="tablebox" id="fingen"><table>
       <thead><tr><th>التاريخ</th><th>الفئة</th><th>الوصف</th><th>المبلغ</th><th>طريقة الدفع</th><th>ملاحظات</th></tr></thead>
       <tbody>${FIN.general.map((g) => `<tr class="frow" data-obj='${esc(JSON.stringify(g))}'>
         <td class="num">${dmy(g.date)}</td>
@@ -866,25 +1047,17 @@ function renderFinance() {
         <td class="num neg">${money(sumCol(FIN.general, 'amount'))}</td>
         <td colspan="2"></td></tr></tfoot>` : ''}
     </table>
-    <div class="addrow"><span class="muted" style="font-size:.8rem">المصاريف العامة</span><button class="btn btn--sm fadd">+ إضافة مصروف</button></div></div>
+    <div class="addrow"><span class="muted" style="font-size:.8rem">المصاريف العامة</span><button class="btn btn--sm fadd">+ إضافة مصروف</button></div></div>`)}
 
-    ${PAY ? `<div class="finhead"><b>💳 سجل المدفوعات</b><span class="muted">كل دفعة مقبوضة، بتاريخها وطريقتها — تُسجَّل من نافذة الحجز (زر «سجّل دفعة») · إجمالي مسجّل <b class="pos">${money(PAY.kpi.total)}</b>${payRows.length >= 120 ? ' · آخر 120 دفعة معروضة' : ''}</span></div>
-    <div class="tablebox" id="finpay"><table>
-      <thead><tr><th>التاريخ</th><th>الرقم</th><th>العميل</th><th>النوع</th><th>الطريقة</th><th>المبلغ</th><th>ملاحظة</th></tr></thead>
-      <tbody>${payRows.map((p) => `<tr data-open="${p.booking_id}" style="cursor:pointer">
-        <td class="num">${dmy(p.paid_on)}</td>
-        <td class="num muted">${esc(p.booking_no || '#' + p.booking_id)}</td>
-        <td><b>${esc(fullName(p))}</b></td>
-        <td>${esc(p.kind || '—')}</td>
-        <td>${esc(p.method || '—')}</td>
-        <td class="num ${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</td>
-        <td class="muted" style="white-space:normal;font-size:.78rem">${esc(p.note || '')}</td>
-      </tr>`).join('') || '<tr><td colspan="7"><div class="empty">لا مدفوعات مسجّلة بعد — افتح حجزاً واضغط «سجّل دفعة»</div></td></tr>'}</tbody>
-    </table>
-    <div class="addrow"><span class="muted" style="font-size:.8rem">السطور المرحّلة تلقائياً من حقول العربون القديمة تحمل تواريخ تقريبية — من اليوم فصاعداً كل دفعة بتاريخها الحقيقي</span></div></div>
+    ${PAY ? sec('fin_charts', '📈 رسوم — المقبوضات وطرق الدفع',
+      'نقد داخل بالشهر · بأي وسيلة يصلنا المال',
+      bars('💵 المقبوضات بالشهر — نقد فعلي داخل (سجل المدفوعات)',
+        (PAY.byMonth || []).slice(-14).map((m) => ({ k: finMonthName(m.k), n: m.s })), money)
+      + bars('طرق الدفع — بأي وسيلة يصلنا المال؟',
+        (PAY.byMethod || []).map((m) => ({ k: `${m.k} (${m.n})`, n: m.s })), money)) : ''}`;
 
-    ${bars('💵 المقبوضات بالشهر — نقد فعلي داخل (سجل المدفوعات)', (PAY.byMonth || []).slice(-14).map((m) => ({ k: payMonth(m.k), n: m.s })), money)}
-    ${bars('طرق الدفع — بأي وسيلة يصلنا المال؟', (PAY.byMethod || []).map((m) => ({ k: `${m.k} (${m.n})`, n: m.s })), money)}` : ''}`;
+  wireSecs(box);
+  renderPayRows();
 
   const send = (table) => (method, body) =>
     api('/office/api/finance', { method, body: JSON.stringify({ table, ...body }) })
@@ -898,10 +1071,23 @@ function renderFinance() {
     btn.disabled = true;
     send('event')('POST', { from_booking: Number(btn.dataset.id) });
   });
-  // متأخرات and سجل المدفوعات rows open the booking's drawer — the دفعة is recorded there.
-  $$('tr[data-open]', box).forEach((r) => r.onclick = () => openDrawerById(Number(r.dataset.open)));
+  // متأخرات rows open the booking's drawer — the دفعة is recorded there.
+  $$('#finod tr[data-open]', box).forEach((r) => r.onclick = () => openDrawerById(Number(r.dataset.open)));
+  // الأشهر year chips scope the monthly table.
+  $$('.chip[data-fmy]', box).forEach((c) => c.onclick = () => { finMonthYear = c.dataset.fmy; renderFinance(); });
+  // Ledger filters: search debounced, the selects immediate — only the rows re-render.
+  const plq = $('#plq', box);
+  if (plq) {
+    let h;
+    plq.addEventListener('input', () => {
+      clearTimeout(h);
+      h = setTimeout(() => { payF.q = plq.value.trim(); loadPayLedger(); }, 350);
+    });
+    $('#plkind', box).onchange = (e) => { payF.kind = e.target.value; loadPayLedger(); };
+    $('#plmethod', box).onchange = (e) => { payF.method = e.target.value; loadPayLedger(); };
+    $('#plmonth', box).onchange = (e) => { payF.month = e.target.value; loadPayLedger(); };
+  }
 }
-
 let INV = null;
 async function loadInventory() { INV = await api('/office/api/inventory'); renderInventory(); }
 function renderInventory() {
@@ -954,6 +1140,31 @@ function renderInsights() {
   const mLabel = (m) => `${mName(m)} ${m.slice(0, 4)}`;
   const scopeLabel = insScope.month ? mLabel(insScope.month) : insScope.year ? `سنة ${insScope.year}` : 'كل الفترات';
   const box = $('#insights');
+
+  // السنوات / الأشهر share one table shape: bookings, held/upcoming, deposit apart,
+  // then the money — expected (prices), actually collected, still owed.
+  const periodTable = (rows, rowAttr, sel, empty) => `<div class="tablebox"><table style="min-width:0">
+      <thead><tr><th>${rowAttr === 'data-yrow' ? 'السنة' : 'الشهر'}</th><th>مؤكدة</th><th>أُقيمت</th><th>قادمة</th><th>عربون (منفصل)</th><th>الإيرادات المتوقعة</th><th>محصّل فعلياً</th><th>متبقٍ</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr ${rowAttr}="${r.k}" style="cursor:pointer${sel === r.k ? ';color:var(--gold)' : ''}">
+        <td><b>${rowAttr === 'data-yrow' ? r.k : mName(r.k)}</b></td>
+        <td class="num">${r.n}</td>
+        <td class="num">${r.n - r.upcoming}</td>
+        <td class="num">${r.upcoming}</td>
+        <td class="num">${r.dep || ''}</td>
+        <td class="num">${money(r.revenue)}</td>
+        <td class="num pos">${money(r.collected)}</td>
+        <td class="num${Number(r.due) > 0 ? ' neg' : ''}">${money(r.due)}</td>
+      </tr>`).join('') || `<tr><td colspan="8"><div class="empty">${empty}</div></td></tr>`}</tbody>
+      ${rows.length > 1 ? `<tfoot><tr><td>المجموع</td>
+        <td class="num">${sumCol(rows, 'n')}</td>
+        <td class="num">${sumCol(rows, 'n') - sumCol(rows, 'upcoming')}</td>
+        <td class="num">${sumCol(rows, 'upcoming')}</td>
+        <td class="num">${sumCol(rows, 'dep')}</td>
+        <td class="num">${money(sumCol(rows, 'revenue'))}</td>
+        <td class="num pos">${money(sumCol(rows, 'collected'))}</td>
+        <td class="num">${money(sumCol(rows, 'due'))}</td></tr></tfoot>` : ''}
+    </table></div>`;
+
   box.innerHTML = `
     <div class="addrow" style="padding:0 0 .3rem;flex-wrap:wrap;gap:.45rem">
       <b style="font-size:.85rem">📅 الفترة:</b>
@@ -968,64 +1179,38 @@ function renderInsights() {
       <button class="btn btn--ghost btn--sm" id="insCsv" title="تنزيل كل جداول التحليلات (بالفترة المختارة) كملف CSV">CSV ⬇</button>
     </div>
 
-    <div class="finhead"><b>✅ الحجوزات المؤكدة — ${scopeLabel}</b><span class="muted">مؤكد / مكتمل فقط — دفع العربون معدود على حدة تحته · التقسيم حسب تاريخ المناسبة</span></div>
-    <section class="kpis" style="padding:0">
+    ${sec('ins_conf', '✅ الحجوزات المؤكدة — ' + scopeLabel,
+      `<b>${b.total || 0}</b> حجزاً · إيرادات <b>${money(b.revenue || 0)}</b> · مؤكد/مكتمل فقط — العربون معدود على حدة`,
+      `<section class="kpis" style="padding:.6rem .8rem">
       <div class="kpi gold"><b>${b.total || 0}</b><span>إجمالي الحجوزات المؤكدة</span></div>
       <div class="kpi gold"><b>${b.upcoming || 0}</b><span>قادمة (لم تُقَم بعد)</span></div>
       <div class="kpi"><b>${b.held || 0}</b><span>أُقيمت (تاريخها مضى)</span></div>
       <div class="kpi"><b>${money(b.revenue || 0)}</b><span>إيرادات (أسعار الحجوزات)</span></div>
       <div class="kpi"><b>${money(b.upcoming_revenue || 0)}</b><span>إيرادات الحجوزات القادمة</span></div>
       <div class="kpi${b.outstanding ? ' gold' : ''}"><b>${money(b.outstanding || 0)}</b><span>المتبقي للتحصيل (المؤكدة القادمة)</span></div>
-    </section>
+    </section>`, true)}
 
-    <div class="finhead"><b>⏳ دفع العربون — بانتظار التأكيد — ${scopeLabel}</b><span class="muted">دفعوا عربوناً ولم يتأكدوا بعد — خارج عدّ المؤكد</span></div>
-    <section class="kpis" style="padding:0">
+    ${sec('ins_dep', '⏳ دفع العربون — بانتظار التأكيد — ' + scopeLabel,
+      `<b>${d.total || 0}</b> حجزاً · مقبوض منها <b>${money(d.collected || 0)}</b>`,
+      `<section class="kpis" style="padding:.6rem .8rem">
       <div class="kpi"><b>${d.total || 0}</b><span>حجوزات بعربون مدفوع</span></div>
       <div class="kpi"><b>${d.upcoming || 0}</b><span>منها قادمة</span></div>
       <div class="kpi"><b>${money(d.value || 0)}</b><span>قيمتها الكاملة (إن تأكدت)</span></div>
       <div class="kpi"><b>${money(d.collected || 0)}</b><span>العرابين المقبوضة منها</span></div>
-    </section>
+    </section>`, true)}
 
-    <div class="finhead"><b>📆 السنوات</b><span class="muted">اضغط على سنة لتصفية كل التحليلات عليها · العربون معدود على حدة</span></div>
-    <div class="tablebox"><table style="min-width:0">
-      <thead><tr><th>السنة</th><th>حجوزات مؤكدة</th><th>أُقيمت</th><th>قادمة</th><th>عربون (منفصل)</th><th>الإيرادات (أسعار المؤكدة)</th></tr></thead>
-      <tbody>${s.years.map((y) => `<tr data-yrow="${y.k}" style="cursor:pointer${insScope.year === y.k ? ';color:var(--gold)' : ''}">
-        <td><b>${y.k}</b></td>
-        <td class="num">${y.n}</td>
-        <td class="num">${y.n - y.upcoming}</td>
-        <td class="num">${y.upcoming}</td>
-        <td class="num">${y.dep || ''}</td>
-        <td class="num">${money(y.revenue)}</td>
-      </tr>`).join('') || '<tr><td colspan="6"><div class="empty">لا حجوزات مؤكدة بعد</div></td></tr>'}</tbody>
-      ${s.years.length > 1 ? `<tfoot><tr><td>المجموع</td>
-        <td class="num">${sumCol(s.years, 'n')}</td>
-        <td class="num">${sumCol(s.years, 'n') - sumCol(s.years, 'upcoming')}</td>
-        <td class="num">${sumCol(s.years, 'upcoming')}</td>
-        <td class="num">${sumCol(s.years, 'dep')}</td>
-        <td class="num">${money(sumCol(s.years, 'revenue'))}</td></tr></tfoot>` : ''}
-    </table></div>
+    ${sec('ins_years', '📆 السنوات',
+      `${sumCol(s.years, 'n')} مؤكدة · محصّل <b class="pos">${money(sumCol(s.years, 'collected'))}</b> · متبقٍ <b>${money(sumCol(s.years, 'due'))}</b> · اضغط على سنة للتصفية`,
+      periodTable(s.years, 'data-yrow', insScope.year, 'لا حجوزات مؤكدة بعد')
+      + '<div class="secnote">اضغط على سنة لتصفية كل التحليلات عليها · «محصّل فعلياً» = السعر − المتبقي لكل حجز مؤكد · العربون معدود على حدة</div>', true)}
 
-    ${insScope.year ? `<div class="finhead"><b>🗓 أشهر ${insScope.year}</b><span class="muted">اضغط على شهر لتصفية كل التحليلات عليه</span></div>
-    <div class="tablebox"><table style="min-width:0">
-      <thead><tr><th>الشهر</th><th>حجوزات مؤكدة</th><th>أُقيمت</th><th>قادمة</th><th>عربون (منفصل)</th><th>الإيرادات (أسعار المؤكدة)</th></tr></thead>
-      <tbody>${s.months.map((m) => `<tr data-mrow="${m.k}" style="cursor:pointer${insScope.month === m.k ? ';color:var(--gold)' : ''}">
-        <td><b>${mName(m.k)}</b></td>
-        <td class="num">${m.n}</td>
-        <td class="num">${m.n - m.upcoming}</td>
-        <td class="num">${m.upcoming}</td>
-        <td class="num">${m.dep || ''}</td>
-        <td class="num">${money(m.revenue)}</td>
-      </tr>`).join('') || '<tr><td colspan="6"><div class="empty">لا حجوزات مؤكدة في هذه السنة</div></td></tr>'}</tbody>
-      ${s.months.length > 1 ? `<tfoot><tr><td>المجموع</td>
-        <td class="num">${sumCol(s.months, 'n')}</td>
-        <td class="num">${sumCol(s.months, 'n') - sumCol(s.months, 'upcoming')}</td>
-        <td class="num">${sumCol(s.months, 'upcoming')}</td>
-        <td class="num">${sumCol(s.months, 'dep')}</td>
-        <td class="num">${money(sumCol(s.months, 'revenue'))}</td></tr></tfoot>` : ''}
-    </table></div>` : ''}
+    ${insScope.year ? sec('ins_months', '🗓 أشهر ' + insScope.year,
+      'اضغط على شهر لتصفية كل التحليلات عليه',
+      periodTable(s.months, 'data-mrow', insScope.month, 'لا حجوزات مؤكدة في هذه السنة'), true) : ''}
 
-    ${s.collections.length ? `<div class="finhead"><b>💰 للتحصيل — مناسبات قادمة عليها متبقٍ — ${scopeLabel}</b><span class="muted">قائمة الاتصال: الأقرب موعداً أولاً · اضغط على سطر لفتح الحجز</span></div>
-    <div class="tablebox"><table>
+    ${s.collections.length ? sec('ins_coll', '💰 للتحصيل — قائمة الاتصال — ' + scopeLabel,
+      `${s.collections.length} حجزاً · المتبقي <b class="neg">${money(sumCol(s.collections, 'remaining'))}</b> · الأقرب موعداً أولاً`,
+      `<div class="tablebox"><table>
       <thead><tr><th>تاريخ المناسبة</th><th>الرقم</th><th>الاسم</th><th>الهاتف</th><th>المدينة</th><th>الحالة</th><th>السعر</th><th>المدفوع (عربون)</th><th>المتبقي</th></tr></thead>
       <tbody>${s.collections.map((r) => `<tr data-open="${r.id}" style="cursor:pointer">
         <td class="num">${dmy(r.event_date)}</td>
@@ -1040,10 +1225,12 @@ function renderInsights() {
       </tr>`).join('')}</tbody>
       <tfoot><tr><td colspan="8">المجموع (${s.collections.length} حجز — مع العربون)</td>
         <td class="num">${money(sumCol(s.collections, 'remaining'))}</td></tr></tfoot>
-    </table></div>` : ''}
+    </table>
+    <div class="secnote">مناسبات قادمة عليها متبقٍ — اضغط على سطر لفتح الحجز وتسجيل الدفعة</div></div>`, true) : ''}
 
-    <div class="finhead"><b>👥 نظرة عامة — ${scopeLabel}</b>${insScope.year || insScope.month ? '<span class="muted">العملاء هنا = من تاريخ مناسبتهم ضمن الفترة المختارة</span>' : ''}</div>
-    <section class="kpis" style="padding:0">
+    ${sec('ins_over', '👥 نظرة عامة — ' + scopeLabel,
+      `${k.clients || 0} عميلاً · تحويل <b>${conv}%</b> · متوسط السعر ${money(Math.round(k.avg_price || 0))}`,
+      `<section class="kpis" style="padding:.6rem .8rem">
       <div class="kpi gold"><b>${k.clients || 0}</b><span>إجمالي العملاء (كل من تواصل)</span></div>
       <div class="kpi gold"><b>${k.booked || 0}</b><span>حجوزات مؤكدة (مؤكد / مكتمل)</span></div>
       <div class="kpi"><b>${conv}%</b><span>نسبة التحويل: عميل ← حجز</span></div>
@@ -1053,9 +1240,11 @@ function renderInsights() {
       <div class="kpi"><b>${esc(topRevenue && topRevenue.revenue ? topRevenue.k : '—')}</b><span>أعلى مدينة إيرادات${topRevenue && topRevenue.revenue ? ` (${money(topRevenue.revenue)})` : ''}</span></div>
       <div class="kpi"><b>${k.cancelled || 0}</b><span>حجوزات ملغاة</span></div>
     </section>
+    ${insScope.year || insScope.month ? '<div class="secnote">العملاء هنا = من تاريخ مناسبتهم ضمن الفترة المختارة</div>' : ''}`)}
 
-    <div class="finhead"><b>🏙 المدن — من أين يأتي العمل؟</b><span class="muted">مرتّبة حسب عدد العملاء · الحجوزات = مؤكد/مكتمل</span></div>
-    <div class="tablebox"><table style="min-width:0">
+    ${sec('ins_cities', '🏙 المدن — من أين يأتي العمل؟',
+      `${s.cities.length} مدينة · مرتّبة حسب عدد العملاء`,
+      `<div class="tablebox"><table style="min-width:0">
       <thead><tr><th>المدينة</th><th>العملاء</th><th>حجوزات فعلية</th><th>نسبة التحويل</th><th>الإيرادات (أسعار)</th></tr></thead>
       <tbody>${s.cities.map((c) => `<tr>
         <td><b>${esc(c.k)}</b></td>
@@ -1069,10 +1258,11 @@ function renderInsights() {
         <td class="num">${sumCol(s.cities, 'booked')}</td>
         <td class="num">${conv}%</td>
         <td class="num">${money(sumCol(s.cities, 'revenue'))}</td></tr></tfoot>` : ''}
-    </table></div>
+    </table></div>`)}
 
-    <div class="finhead"><b>🎉 أنواع المناسبات</b><span class="muted">أي المناسبات تجلب أكثر حجوزات وإيرادات؟</span></div>
-    <div class="tablebox"><table style="min-width:0">
+    ${sec('ins_occ', '🎉 أنواع المناسبات',
+      `${s.occasions.length} نوعاً · أيها يجلب أكثر حجوزات وإيرادات؟`,
+      `<div class="tablebox"><table style="min-width:0">
       <thead><tr><th>النوع</th><th>العملاء</th><th>حجوزات فعلية</th><th>الإيرادات (أسعار)</th></tr></thead>
       <tbody>${s.occasions.map((c) => `<tr>
         <td><b>${esc(c.k)}</b></td>
@@ -1080,16 +1270,19 @@ function renderInsights() {
         <td class="num">${c.booked}</td>
         <td class="num">${money(c.revenue)}</td>
       </tr>`).join('') || '<tr><td colspan="4"><div class="empty">لا بيانات بعد</div></td></tr>'}</tbody>
-    </table></div>
+    </table></div>`)}
 
-    ${insScope.year ? '' : bars('الحجوزات المؤكدة بالشهر (شهر المناسبة)', s.months.map((r) => ({ k: mLabel(r.k), n: r.n })))}
-    ${bars('📈 حجوزات جديدة بالشهر (تاريخ الحجز — متى وقّعنا)', s.made.map((r) => ({ k: mLabel(r.k) + (r.dep ? ` (+${r.dep} عربون)` : ''), n: r.n })))}
-    ${bars('مصادر العملاء — من أين يسمعون عنا؟', s.sources.map((r) => ({ k: `${r.k} (حجوزات: ${r.booked})`, n: r.clients })))}
-    ${bars('أيام الأسبوع الأكثر حجزاً', s.weekdays.map((r) => ({ k: DAY[r.k] || r.k, n: r.n })))}
-    ${bars('القاعات الأكثر تكراراً', s.venues)}
+    ${sec('ins_charts', '📈 رسوم بيانية',
+      'حجوزات بالشهر · حجوزات جديدة · مصادر العملاء · أيام الأسبوع · القاعات',
+      (insScope.year ? '' : bars('الحجوزات المؤكدة بالشهر (شهر المناسبة)', s.months.map((r) => ({ k: mLabel(r.k), n: r.n }))))
+      + bars('📈 حجوزات جديدة بالشهر (تاريخ الحجز — متى وقّعنا)', s.made.map((r) => ({ k: mLabel(r.k) + (r.dep ? ` (+${r.dep} عربون)` : ''), n: r.n })))
+      + bars('مصادر العملاء — من أين يسمعون عنا؟', s.sources.map((r) => ({ k: `${r.k} (حجوزات: ${r.booked})`, n: r.clients })))
+      + bars('أيام الأسبوع الأكثر حجزاً', s.weekdays.map((r) => ({ k: DAY[r.k] || r.k, n: r.n })))
+      + bars('القاعات الأكثر تكراراً', s.venues))}
 
-    ${s.gaps.length ? `<div class="finhead"><b>🧩 بيانات ناقصة (${s.gaps.length}${s.gaps.length === 60 ? '+' : ''})</b><span class="muted">سجلات ينقصها ما تعتمد عليه التحليلات — اضغط على سطر لإكماله (القائمة عامة، لا تتأثر بالفترة)</span></div>
-    <div class="tablebox"><table style="min-width:0">
+    ${s.gaps.length ? sec('ins_gaps', '🧩 بيانات ناقصة',
+      `<b class="neg">${s.gaps.length}${s.gaps.length === 60 ? '+' : ''}</b> سجلاً ينقصه ما تعتمد عليه التحليلات (القائمة عامة، لا تتأثر بالفترة)`,
+      `<div class="tablebox"><table style="min-width:0">
       <thead><tr><th>الرقم</th><th>الاسم</th><th>تاريخ المناسبة</th><th>الحالة</th><th>الناقص</th></tr></thead>
       <tbody>${s.gaps.map((g) => `<tr data-open="${g.id}" style="cursor:pointer">
         <td class="num muted">${esc(g.booking_no || '#' + g.id)}</td>
@@ -1100,8 +1293,10 @@ function renderInsights() {
                g.miss_phone && 'الهاتف', g.miss_booked_at && 'تاريخ الحجز']
               .filter(Boolean).map((t) => `<span class="chip ex" style="text-decoration:none">${t}</span>`).join(' ')}</td>
       </tr>`).join('')}</tbody>
-    </table></div>` : ''}`;
+    </table>
+    <div class="secnote">اضغط على سطر لإكمال بياناته</div></div>`) : ''}`;
 
+  wireSecs(box);
   const setScope = (year, month) => {
     insScope.year = year;
     insScope.month = month;
@@ -1130,10 +1325,10 @@ function renderInsights() {
     sec(`دفع العربون (منفصل) — ${scopeLabel}`,
       ['العدد', 'قادمة', 'القيمة الكاملة', 'العرابين المقبوضة'],
       [[d.total, d.upcoming, d.value, d.collected]]);
-    sec('السنوات', ['السنة', 'مؤكدة', 'أقيمت', 'قادمة', 'عربون', 'الإيرادات'],
-      s.years.map((y) => [y.k, y.n, y.n - y.upcoming, y.upcoming, y.dep, y.revenue]));
-    sec('الأشهر', ['الشهر', 'مؤكدة', 'أقيمت', 'قادمة', 'عربون', 'الإيرادات'],
-      s.months.map((m) => [m.k, m.n, m.n - m.upcoming, m.upcoming, m.dep, m.revenue]));
+    sec('السنوات', ['السنة', 'مؤكدة', 'أقيمت', 'قادمة', 'عربون', 'الإيرادات', 'محصّل', 'متبقٍ'],
+      s.years.map((y) => [y.k, y.n, y.n - y.upcoming, y.upcoming, y.dep, y.revenue, y.collected, y.due]));
+    sec('الأشهر', ['الشهر', 'مؤكدة', 'أقيمت', 'قادمة', 'عربون', 'الإيرادات', 'محصّل', 'متبقٍ'],
+      s.months.map((m) => [m.k, m.n, m.n - m.upcoming, m.upcoming, m.dep, m.revenue, m.collected, m.due]));
     sec('حجوزات جديدة بالشهر (تاريخ الحجز)', ['الشهر', 'مؤكدة', 'عربون'],
       s.made.map((r) => [r.k, r.n, r.dep]));
     sec(`المدن — ${scopeLabel}`, ['المدينة', 'العملاء', 'حجوزات مؤكدة', 'الإيرادات'],
@@ -1643,6 +1838,17 @@ async function loadIntel() {
 // sees is always what is stored.
 const PAY_KINDS = ['عربون', 'دفعة'];
 
+// مرجع الدفع placeholder follows the chosen method — a bank transfer wants the payer's
+// account details / reference number, a check wants its number, a card its last digits.
+const REF_HINT = {
+  'تحويل بنكي': 'حساب الدافع / رقم الحوالة (أسמכתא)',
+  'شيك': 'رقم الشيك والبنك',
+  'بطاقة ائتمان': 'آخر 4 أرقام / رقم العملية',
+  'Bit': 'هاتف الدافع في Bit / رقم العملية',
+  'PayBox': 'هاتف الدافع في PayBox / رقم العملية',
+};
+const refHint = (method) => REF_HINT[method] || 'مرجع الدفع (اختياري)';
+
 async function loadPayments(bookingId) {
   try {
     const r = await api('/office/api/payments?booking=' + bookingId);
@@ -1668,10 +1874,11 @@ function renderPayments(bookingId, list) {
     ${list.map((p) => `<div class="payrow">
       <span class="num muted">${dmy(p.paid_on)}</span>
       <span>${esc(p.kind || 'دفعة')}${p.method ? ` · ${esc(p.method)}` : ''}</span>
+      ${p.payer ? `<span class="muted" title="من دفع فعلياً">👤 ${esc(p.payer)}</span>` : ''}
       <b class="${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</b>
       ${p.doc_number ? `<span class="muted num" title="مستند صادر">🧾 ${esc(p.doc_number)}</span>` : ''}
       <button class="paydel" data-id="${p.id}" title="حذف الدفعة">✕</button>
-      ${p.note ? `<span class="muted paynote">${esc(p.note)}</span>` : ''}
+      ${p.method_ref || p.note ? `<span class="muted paynote">${esc([p.method_ref, p.note].filter(Boolean).join(' · '))}</span>` : ''}
     </div>`).join('')}
     <div class="payform">
       <input id="p_amount" type="number" step="any" inputmode="decimal" placeholder="المبلغ ₪">
@@ -1679,10 +1886,15 @@ function renderPayments(bookingId, list) {
         PAY_KINDS.map((k) => `<option${(list.length ? k === 'دفعة' : k === 'عربون') ? ' selected' : ''}>${k}</option>`).join('')}</select>
       <select id="p_method"><option value="">طريقة الدفع…</option>${methods.map((m) => `<option>${esc(m)}</option>`).join('')}</select>
       <input id="p_date" type="date" value="${localISO()}">
+      <input id="p_payer" placeholder="اسم الدافع — إن لم يكن صاحب الحجز" title="يُترك فارغاً عندما يدفع صاحب الحجز بنفسه">
+      <input id="p_ref" placeholder="${esc(refHint(''))}" title="تفاصيل تُثبت الدفعة: حساب المحوِّل، رقم الحوالة، رقم الشيك…">
       <input id="p_note" placeholder="ملاحظة (اختياري)">
       <button type="button" class="btn btn--sm" id="payAdd">💳 سجّل دفعة</button>
     </div>
     ${hint}`;
+
+  // The reference hint follows the chosen طريقة الدفع.
+  $('#p_method').onchange = () => { $('#p_ref').placeholder = refHint($('#p_method').value); };
 
   $('#payAdd').onclick = async () => {
     const amount = parseFloat($('#p_amount').value);
@@ -1694,6 +1906,7 @@ function renderPayments(bookingId, list) {
         booking_id: bookingId, amount,
         kind: $('#p_kind').value, method: $('#p_method').value,
         paid_on: $('#p_date').value, note: $('#p_note').value,
+        payer: $('#p_payer').value, method_ref: $('#p_ref').value,
       }) });
       afterPayMutation(bookingId, r);
       toast('سُجّلت الدفعة ✓ — حُدّث العربون والمتبقي');

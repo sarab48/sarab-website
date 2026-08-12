@@ -828,3 +828,56 @@ away; what it still needs is exactly this ledger.
   array checked despite HTTP 200), key in a Pages secret, doc columns + retry state
   already waiting in the ledger and the panel. Check in the Invoice4U account first:
   the plan's document quota, and the exact type of the two hand-made receipts.
+
+### 2026-08-12 — إعادة تنظيم المالية والتحليلات + من دفع فعلياً (owner request)
+
+The two money tabs had become long stacks of always-open tables ("a lot to scroll and
+to search in" — the owner). Reorganized around the owner's stated priorities: per-year
+expected vs. actually collected, per-month cash + net income + bookings, the payments
+ledger, and filters everywhere. Nothing was removed — every table is still there, now
+inside collapsible sections.
+
+- **Collapsible sections** (`details.sec` + `sec()`/`wireSecs()` helpers): every long
+  table in المالية and التحليلات lives in a `<details>` whose summary carries the
+  bottom line (count + totals), so a closed section still answers the question.
+  Open/closed is remembered per section in `localStorage` (`sec_<key>`). Alert boxes
+  (المتأخرات, مكتملة غير مُدرجة) stay always-visible on purpose.
+- **المالية: 📊 السنوات — مالياً** (new, `byYear` in finance.js): per event year —
+  confirmed bookings (مؤكد/مكتمل), قادمة, expected ₪ (prices), **collected ₪**
+  (price − remaining per booking, deposit when no price — the tab's own «محصّل» rule),
+  **due ₪**, and دفع العربون apart (count · cash taken). tfoot totals.
+- **المالية: 🗓 الأشهر — المقبوضات وصافي الدخل** (new, `byMonth` in finance.js): per
+  month — events held (confirmed, by event month), **cash received** (the ledger, by
+  paid_on), **expenses** (event expenses by event month + general by their date),
+  **net = received − expenses**. Year chips scope the table (default: current year).
+  Four grouped queries merged in JS — no schema change.
+- **سجل المدفوعات filters** (server-side, they scale as the table grows): `q=` matches
+  client / payer / note / booking_no / method_ref, plus `method=`, `kind=`,
+  `month=YYYY-MM`. Only the `rows` list narrows; sums/KPIs/متأخرات stay whole. New
+  `matched` (count + Σ of the whole match) → the UI totals the match and says
+  «معروض N من M» when clipped (limit 200, was 120). Typing re-renders only the rows.
+- **من دفع فعلياً** (migration `2026-08-12-payments-payer.sql`, **purely additive**):
+  `payments.payer` (اسم الدافع — empty = the client themselves) + `payments.method_ref`
+  (مرجع الدفع: bank account / transfer reference / check no. / last-4). Drawer form
+  gained both fields — the مرجع placeholder follows the chosen طريقة الدفع (bank
+  transfer → payer's account/ref number, check → its number…). Shown in the drawer
+  history and the ledger (payer under the client, ref under the method). PATCH allows
+  payer/ref edits even on doc-carrying payments (amounts stay locked). The future
+  Invoice4U receipt will name the actual payer.
+- **التحليلات**: السنوات/الأشهر tables gained **محصّل فعلياً** and **متبقٍ** columns
+  (same rule, in insights.js) + CSV columns; sections became collapsible — the
+  headline ones open (المؤكدة, العربون, السنوات, الأشهر, للتحصيل), the analytical ones
+  closed with informative headers (نظرة عامة, المدن, المناسبات, رسوم بيانية, بيانات
+  ناقصة). Filter chips + clickable year/month rows unchanged.
+- **Remote migration verified**: backup `ops/db-backups/2026-08-12-pre-payer/`
+  (payments 46, bookings 276, event_finances 17, general_expenses 5, options 47);
+  after ALTER: 46/46 payments byte-identical on every pre-existing field, new columns
+  all NULL, bookings count unchanged.
+- Tests: `_vpayments.mjs` grew to 24 checks (payer/ref store + echo with no delta,
+  the three ledger filters + matched, ref-hint follows method, payer chip in drawer +
+  ledger, السنوات/الأشهر sections render, closed-by-default section, live search
+  narrowing); `_vfinance.mjs` + `_vinsights.mjs` pass unchanged (their clickable rows
+  deliberately live in open-by-default sections). Verified in-browser desktop + phone
+  (no horizontal overflow, RTL correct).
+- Deployed 03114bc4; probes: apex/www 200, /office + API 302 behind Access, both Pages
+  secrets intact.

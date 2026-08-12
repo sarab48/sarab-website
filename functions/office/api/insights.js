@@ -37,6 +37,9 @@ export async function onRequestGet({ request, env }) {
   const gk = (col) => `COALESCE(NULLIF(TRIM(${col}), ''), 'غير محدد')`
   const isConf = `status IN ${CONFIRMED}`
   const isDep = `status = 'دفع العربون'`
+  // What a booking actually collected: price − what it still owes; no price tracked →
+  // the deposit is what we know arrived. Same rule as the finance tab's «محصّل».
+  const collected = `COALESCE(price - COALESCE(remaining, 0), COALESCE(deposit, 0))`
   const upcoming = "event_date >= date('now')"
   const noVal = (col) => `(${col} IS NULL OR TRIM(${col}) = '')`
   const [kpi, booked, deposit, years, months, made, collections, gaps,
@@ -68,14 +71,18 @@ export async function onRequestGet({ request, env }) {
       SUM(CASE WHEN ${isConf} THEN 1 ELSE 0 END) AS n,
       SUM(CASE WHEN ${isConf} AND ${upcoming} THEN 1 ELSE 0 END) AS upcoming,
       SUM(CASE WHEN ${isDep} THEN 1 ELSE 0 END) AS dep,
-      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue
+      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue,
+      COALESCE(SUM(CASE WHEN ${isConf} THEN ${collected} END), 0) AS collected,
+      COALESCE(SUM(CASE WHEN ${isConf} THEN remaining END), 0) AS due
       FROM bookings WHERE status IN ${REAL} AND event_date IS NOT NULL AND length(event_date) >= 4
       GROUP BY k ORDER BY k`),
     env.DB.prepare(`SELECT substr(event_date, 1, 7) AS k,
       SUM(CASE WHEN ${isConf} THEN 1 ELSE 0 END) AS n,
       SUM(CASE WHEN ${isConf} AND ${upcoming} THEN 1 ELSE 0 END) AS upcoming,
       SUM(CASE WHEN ${isDep} THEN 1 ELSE 0 END) AS dep,
-      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue
+      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue,
+      COALESCE(SUM(CASE WHEN ${isConf} THEN ${collected} END), 0) AS collected,
+      COALESCE(SUM(CASE WHEN ${isConf} THEN remaining END), 0) AS due
       FROM bookings WHERE status IN ${REAL} AND event_date IS NOT NULL AND length(event_date) >= 7 ${yearScope}
       GROUP BY k ORDER BY k`),
     // Bookings *signed* per month (تاريخ الحجز) — how sales are going, independent of

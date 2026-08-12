@@ -25,8 +25,13 @@ const val = (k, v, nums) => {
   return String(v).trim().slice(0, 300) || null
 }
 
+// collected per booking, in SQL: what its price minus what it still owes; with no
+// price tracked, the deposit is what we know arrived. Same rule the tab's «محصّل»
+// column and the payments backfill used — the three can never disagree.
+const COLLECTED = `COALESCE(price - COALESCE(remaining, 0), COALESCE(deposit, 0))`
+
 async function payload(env) {
-  const [ev, gen, kpi, adv, miss] = await env.DB.batch([
+  const [ev, gen, kpi, adv, miss, byYear, mPay, mEvExp, mGenExp, mEvents] = await env.DB.batch([
     env.DB.prepare('SELECT * FROM event_finances ORDER BY (event_date IS NULL), event_date DESC, id DESC'),
     env.DB.prepare('SELECT * FROM general_expenses ORDER BY (date IS NULL), date DESC, id DESC'),
     env.DB.prepare(`SELECT
@@ -53,7 +58,57 @@ async function payload(env) {
                       AND NOT EXISTS (SELECT 1 FROM event_finances f
                                       WHERE f.booking_no IS NOT NULL AND f.booking_no = b.booking_no)
                     ORDER BY (b.event_date IS NULL), b.event_date DESC, b.id DESC`),
+    // السنوات مالياً — the owner's headline question, per event year: how many confirmed
+    // bookings, what they're worth (expected), what actually arrived (collected), what is
+    // still owed (due), and how many haven't happened yet. دفع العربون kept apart on the
+    // owner's rule (deposit paid ≠ confirmed) with its own count + cash-in-hand.
+    env.DB.prepare(`SELECT substr(event_date, 1, 4) AS k,
+      SUM(CASE WHEN status IN ('مؤكد','مكتمل') THEN 1 ELSE 0 END) AS n,
+      SUM(CASE WHEN status IN ('مؤكد','مكتمل') AND event_date >= date('now') THEN 1 ELSE 0 END) AS upcoming,
+      COALESCE(SUM(CASE WHEN status IN ('مؤكد','مكتمل') THEN price END), 0) AS expected,
+      COALESCE(SUM(CASE WHEN status IN ('مؤكد','مكتمل') THEN ${COLLECTED} END), 0) AS collected,
+      COALESCE(SUM(CASE WHEN status IN ('مؤكد','مكتمل') THEN remaining END), 0) AS due,
+      SUM(CASE WHEN status = 'دفع العربون' THEN 1 ELSE 0 END) AS dep_n,
+      COALESCE(SUM(CASE WHEN status = 'دفع العربون' THEN deposit END), 0) AS dep_paid
+      FROM bookings
+      WHERE status IN ('مؤكد','مكتمل','دفع العربون')
+        AND event_date IS NOT NULL AND length(event_date) >= 4
+      GROUP BY k ORDER BY k DESC`),
+    // الأشهر — four month-keyed slices merged below into one cash picture per month:
+    // payments received (the ledger, by paid_on), event expenses (by event month),
+    // general expenses (by their date), events held (confirmed, by event month).
+    env.DB.prepare(`SELECT substr(paid_on, 1, 7) AS k, SUM(amount) AS v
+                    FROM payments WHERE paid_on IS NOT NULL GROUP BY k`),
+    env.DB.prepare(`SELECT substr(event_date, 1, 7) AS k, SUM(COALESCE(total_expenses, 0)) AS v
+                    FROM event_finances WHERE event_date IS NOT NULL AND length(event_date) >= 7
+                    GROUP BY k`),
+    env.DB.prepare(`SELECT substr(date, 1, 7) AS k, SUM(COALESCE(amount, 0)) AS v
+                    FROM general_expenses WHERE date IS NOT NULL AND length(date) >= 7
+                    GROUP BY k`),
+    env.DB.prepare(`SELECT substr(event_date, 1, 7) AS k, COUNT(*) AS v
+                    FROM bookings
+                    WHERE status IN ('مؤكد','مكتمل')
+                      AND event_date IS NOT NULL AND length(event_date) >= 7
+                    GROUP BY k`),
   ])
+  // Merge the month slices; net follows the owner's rule — money actually received
+  // that month minus the expenses attributed to it.
+  const months = new Map()
+  const fold = (rows, field) => {
+    for (const r of rows) {
+      if (!/^\d{4}-\d{2}$/.test(r.k || '')) continue
+      const o = months.get(r.k) || { k: r.k, collected: 0, ev_expenses: 0, gen_expenses: 0, events: 0 }
+      o[field] += Number(r.v) || 0
+      months.set(r.k, o)
+    }
+  }
+  fold(mPay.results, 'collected')
+  fold(mEvExp.results, 'ev_expenses')
+  fold(mGenExp.results, 'gen_expenses')
+  fold(mEvents.results, 'events')
+  const byMonth = [...months.values()]
+    .map((m) => ({ ...m, net: m.collected - m.ev_expenses - m.gen_expenses }))
+    .sort((a, b) => b.k.localeCompare(a.k))
   return {
     ok: true,
     events: ev.results,
@@ -61,6 +116,8 @@ async function payload(env) {
     kpi: kpi.results[0],
     advances: adv.results,
     missing: miss.results,
+    byYear: byYear.results,
+    byMonth,
   }
 }
 

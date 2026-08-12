@@ -3,8 +3,16 @@
 
   GET ?booking=ID  → that booking's payments + the booking row (the drawer's panel)
   GET              → the finance tab's view: recent ledger, Σ by month / by method,
-                     KPIs, and المتأخرات (events already held that still owe money)
+                     KPIs, and المتأخرات (events already held that still owe money).
+                     Ledger filters (the table will only grow): q= matches client /
+                     payer / note / booking_no / method_ref, method=, kind=,
+                     month=YYYY-MM — all narrow the `rows` list only; the sums, KPIs
+                     and المتأخرات stay whole so the totals never silently shrink.
   POST / PATCH / DELETE → record / adjust / remove a payment.
+
+  A payment records who actually paid when that isn't the booking's client (payer,
+  2026-08-12) and the payment's paper trail (method_ref: bank account / transfer
+  reference / check number) — the receipt automation will name the actual payer.
 
   The stored running totals keep working exactly as before — they are synced by exact
   deltas on every mutation, never rebuilt: recording a payment decrements
@@ -61,11 +69,33 @@ async function bookingPayload(env, bookingId) {
   return { ok: true, payments: list.results, booking: row.results[0] || null }
 }
 
-async function globalPayload(env) {
-  const [rows, byMonth, byMethod, kpi, overdue] = await env.DB.batch([
+const ROWS_LIMIT = 200
+
+async function globalPayload(env, f = {}) {
+  const conds = []
+  const binds = []
+  const add = (sql, v) => { binds.push(v); conds.push(sql.replace('?', `?${binds.length}`)) }
+  if (f.month) add(`substr(p.paid_on, 1, 7) = ?`, f.month)
+  if (f.method) add(`p.method = ?`, f.method)
+  if (f.kind) add(`p.kind = ?`, f.kind)
+  if (f.q) {
+    const like = `%${f.q}%`
+    conds.push(`(b.name LIKE ?${binds.length + 1} OR (b.first_name || ' ' || b.last_name) LIKE ?${binds.length + 1}
+      OR p.payer LIKE ?${binds.length + 1} OR p.note LIKE ?${binds.length + 1}
+      OR p.method_ref LIKE ?${binds.length + 1} OR b.booking_no LIKE ?${binds.length + 1})`)
+    binds.push(like)
+  }
+  const where = conds.length ? 'WHERE ' + conds.join(' AND ') : ''
+  const [rows, matched, byMonth, byMethod, kpi, overdue] = await env.DB.batch([
     env.DB.prepare(`SELECT p.*, b.booking_no, b.name, b.first_name, b.last_name, b.city
-                    FROM payments p LEFT JOIN bookings b ON b.id = p.booking_id
-                    ORDER BY (p.paid_on IS NULL), p.paid_on DESC, p.id DESC LIMIT 120`),
+                    FROM payments p LEFT JOIN bookings b ON b.id = p.booking_id ${where}
+                    ORDER BY (p.paid_on IS NULL), p.paid_on DESC, p.id DESC LIMIT ${ROWS_LIMIT}`)
+      .bind(...binds),
+    // Count + Σ of everything the filter matches, so the UI can total the whole match
+    // and say "showing N of M" when the list is clipped.
+    env.DB.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(p.amount), 0) AS s
+                    FROM payments p LEFT JOIN bookings b ON b.id = p.booking_id ${where}`)
+      .bind(...binds),
     env.DB.prepare(`SELECT substr(paid_on, 1, 7) AS k, SUM(amount) AS s, COUNT(*) AS n
                     FROM payments WHERE paid_on IS NOT NULL GROUP BY k ORDER BY k`),
     env.DB.prepare(`SELECT COALESCE(method, 'غير محدّدة') AS k, SUM(amount) AS s, COUNT(*) AS n
@@ -88,6 +118,8 @@ async function globalPayload(env) {
   return {
     ok: true,
     rows: rows.results,
+    matched: matched.results[0],
+    limit: ROWS_LIMIT,
     byMonth: byMonth.results,
     byMethod: byMethod.results,
     kpi: kpi.results[0],
@@ -96,8 +128,15 @@ async function globalPayload(env) {
 }
 
 export async function onRequestGet({ request, env }) {
-  const booking = Number(new URL(request.url).searchParams.get('booking'))
-  return Response.json(booking ? await bookingPayload(env, booking) : await globalPayload(env))
+  const p = new URL(request.url).searchParams
+  const booking = Number(p.get('booking'))
+  if (booking) return Response.json(await bookingPayload(env, booking))
+  return Response.json(await globalPayload(env, {
+    q: txt(p.get('q'), 80),
+    method: txt(p.get('method'), 60),
+    kind: txt(p.get('kind'), 40),
+    month: /^\d{4}-\d{2}$/.test(p.get('month') || '') ? p.get('month') : null,
+  }))
 }
 
 export async function onRequestPost({ request, env }) {
@@ -114,10 +153,12 @@ export async function onRequestPost({ request, env }) {
   const method = txt(b.method, 60)
   const paid_on = DATE_RE.test(String(b.paid_on || '')) ? b.paid_on : today()
   const note = txt(b.note, 300)
+  const payer = txt(b.payer, 120)
+  const method_ref = txt(b.method_ref, 180)
   await env.DB.prepare(
-    `INSERT INTO payments (booking_id, amount, kind, method, paid_on, note)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
-  ).bind(bookingId, amount, kind, method, paid_on, note).run()
+    `INSERT INTO payments (booking_id, amount, kind, method, paid_on, note, payer, method_ref)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
+  ).bind(bookingId, amount, kind, method, paid_on, note, payer, method_ref).run()
   await applyDelta(env, bookingId, amount, kind === 'عربون' ? amount : 0)
   return Response.json(await bookingPayload(env, bookingId))
 }
@@ -139,10 +180,15 @@ export async function onRequestPatch({ request, env }) {
     ? (DATE_RE.test(String(b.paid_on || '')) ? b.paid_on : null)
     : old.paid_on
   const note = 'note' in b ? txt(b.note, 300) : old.note
+  // Who paid / the paper trail stay editable even on doc-issued payments — correcting
+  // a payer name or a bank reference never changes the amounts a document certifies.
+  const payer = 'payer' in b ? txt(b.payer, 120) : old.payer
+  const method_ref = 'method_ref' in b ? txt(b.method_ref, 180) : old.method_ref
 
   await env.DB.prepare(
-    `UPDATE payments SET amount = ?1, kind = ?2, method = ?3, paid_on = ?4, note = ?5 WHERE id = ?6`
-  ).bind(amount, kind, method, paid_on, note, id).run()
+    `UPDATE payments SET amount = ?1, kind = ?2, method = ?3, paid_on = ?4, note = ?5,
+       payer = ?6, method_ref = ?7 WHERE id = ?8`
+  ).bind(amount, kind, method, paid_on, note, payer, method_ref, id).run()
 
   const dAmount = amount - old.amount
   const dDeposit = (kind === 'عربون' ? amount : 0) - (old.kind === 'عربون' ? old.amount : 0)
