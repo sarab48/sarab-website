@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS payments (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   booking_id     INTEGER NOT NULL,     -- bookings.id
   amount         REAL NOT NULL,        -- ₪ received
-  kind           TEXT,                 -- عربون | دفعة
+  kind           TEXT,                 -- عربون | دفعة | إكرامية (tip: cash in hand only — never moves deposit/remaining/P&L, excluded from receipts)
   method         TEXT,                 -- طريقة الدفع (options kind=payment_method)
   paid_on        TEXT,                 -- date received (YYYY-MM-DD)
   note           TEXT,

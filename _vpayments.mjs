@@ -52,6 +52,19 @@ try {
   r = await send('/office/api/payments', { id: payAdv }, 'DELETE')
   results.deleteReverses = near(r.booking.deposit, 800) && near(r.booking.remaining, 1200)
 
+  // 5b) إكرامية 150 (tip, 2026-08-12): lands in the ledger, moves NOTHING on the booking.
+  r = await send('/office/api/payments', { booking_id: A.id, amount: 150, kind: 'إكرامية', method: 'نقداً', paid_on: '2026-08-12' })
+  const payTip = r.payments.find((p) => p.kind === 'إكرامية').id
+  results.tipMovesNothing = near(r.booking.deposit, 800) && near(r.booking.remaining, 1200)
+  // 5c) PATCH the tip's amount 150→250: still nothing moves.
+  r = await send('/office/api/payments', { id: payTip, amount: 250 }, 'PATCH')
+  results.tipPatchInert = near(r.booking.deposit, 800) && near(r.booking.remaining, 1200)
+  // 5d) Kind flip إكرامية→دفعة makes it count (remaining 1200→950); flipping back restores.
+  r = await send('/office/api/payments', { id: payTip, kind: 'دفعة' }, 'PATCH')
+  results.tipToPay = near(r.booking.remaining, 950)
+  r = await send('/office/api/payments', { id: payTip, kind: 'إكرامية' }, 'PATCH')
+  results.payToTip = near(r.booking.remaining, 1200)
+
   // 6) Completed → P&L row seeds (paid = price − remaining = 800); a payment then follows it.
   await send(`/office/api/bookings/${A.id}`, { status: 'مكتمل' }, 'PATCH')
   let fin = await get('/office/api/finance')
@@ -70,6 +83,8 @@ try {
     && g.byMonth.some((m) => m.k === '2026-08')
   results.overdueList = g.overdue.some((o) => o.name === 'دفعات ب') && !g.overdue.some((o) => o.id === A.id)
   results.globalMatched = g.matched && g.matched.n >= g.rows.length
+  // Tips sum in their own KPI (still part of total — real cash received).
+  results.kpiTips = Number(g.kpi.tips) >= 250
 
   // 8) Ledger filters (2026-08-12): q matches the payer, method and kind narrow exactly.
   const gq = await get('/office/api/payments?q=' + encodeURIComponent('والد العريس'))
@@ -79,6 +94,24 @@ try {
   results.filterMethod = gm.rows.length >= 1 && gm.rows.every((p) => p.method === 'تحويل بنكي')
   const gk2 = await get('/office/api/payments?kind=' + encodeURIComponent('عربون'))
   results.filterKind = gk2.rows.length >= 1 && gk2.rows.every((p) => p.kind === 'عربون')
+  const gk3 = await get('/office/api/payments?kind=' + encodeURIComponent('إكرامية'))
+  results.filterTip = gk3.rows.length >= 1 && gk3.rows.every((p) => p.kind === 'إكرامية')
+
+  // 9) Derived remaining ignores tips: NULL-remaining booking gets a tip then a دفعة —
+  //    the tip leaves remaining/deposit NULL, the دفعة derives 1000 − 400 (tip excluded).
+  const C = await seed({ name: 'دفعات ج', phone: '0590000023', status: 'مؤكد', event_date: '2032-07-01', price: 1000 })
+  r = await send('/office/api/payments', { booking_id: C.id, amount: 100, kind: 'إكرامية' })
+  results.tipLeavesNull = r.booking.remaining === null && r.booking.deposit == null
+  r = await send('/office/api/payments', { booking_id: C.id, amount: 400, kind: 'دفعة' })
+  results.derivedSkipsTips = near(r.booking.remaining, 600)
+
+  // 10) DELETE the tip on أ: nothing moves back (remaining stays 0) and the P&L paid
+  //     stays 2000 — the tip never entered it.
+  r = await send('/office/api/payments', { id: payTip }, 'DELETE')
+  results.tipDeleteInert = near(r.booking.remaining, 0)
+  fin = await get('/office/api/finance')
+  evRow = fin.events.find((e) => e.booking_no === bookingNo)
+  results.tipNeverInPL = !!evRow && near(evRow.paid, 2000)
 
   // --- UI ---
   browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] })
@@ -119,6 +152,18 @@ try {
   await page.locator('#paybox .payrow .paydel').last().click()
   await page.waitForFunction(() => document.querySelectorAll('#paybox .payrow').length === 2)
   results.uiDelete = (await page.inputValue('#f_remaining')) === '0'
+
+  // 🎁 إكرامية via the form: the row appears, العربون/المتبقي stand still, and the
+  // panel header counts the tip apart from المجموع.
+  await page.fill('#p_amount', '90')
+  await page.selectOption('#p_kind', 'إكرامية')
+  await page.click('#payAdd')
+  await page.waitForFunction(() => document.querySelectorAll('#paybox .payrow').length === 3)
+  results.uiTipInert = (await page.inputValue('#f_deposit')) === '800'
+    && (await page.inputValue('#f_remaining')) === '0'
+    && (await page.locator('#paybox .payhead').textContent()).includes('إكرامية')
+  await page.locator('#paybox .payrow .paydel').last().click()
+  await page.waitForFunction(() => document.querySelectorAll('#paybox .payrow').length === 2)
   await page.click('#closeBtn')
 
   // المالية: the KPI tile, the ledger table with our rows, المتأخرات with ب, both bars.

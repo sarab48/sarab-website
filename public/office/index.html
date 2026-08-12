@@ -810,7 +810,7 @@ const payRowHtml = (p) => `<tr data-open="${p.booking_id}" style="cursor:pointer
   <td class="num">${dmy(p.paid_on)}</td>
   <td class="num muted">${esc(p.booking_no || '#' + p.booking_id)}</td>
   <td><b>${esc(fullName(p))}</b>${p.payer ? `<div class="muted" style="font-size:.72rem">👤 الدافع: ${esc(p.payer)}</div>` : ''}</td>
-  <td>${esc(p.kind || '—')}</td>
+  <td>${p.kind === 'إكرامية' ? '🎁 ' : ''}${esc(p.kind || '—')}</td>
   <td>${esc(p.method || '—')}${p.method_ref ? `<div class="muted" style="font-size:.72rem">${esc(p.method_ref)}</div>` : ''}</td>
   <td class="num ${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</td>
   <td class="muted" style="white-space:normal;font-size:.78rem">${esc(p.note || '')}</td>
@@ -919,7 +919,7 @@ function renderFinance() {
         <td class="num">${money(sumCol(bmShown, 'ev_expenses'))}</td>
         <td class="num">${money(sumCol(bmShown, 'net'))}</td></tr></tfoot>` : ''}
     </table>
-    <div class="secnote">الدخل المتوقع = أسعار مناسبات الشهر (مؤكد/مكتمل بتاريخ المناسبة) · المقبوض = سجل المدفوعات بتاريخ القبض — عربون أو دفعة، أياً كان شهر مناسبته · الصافي = المقبوض − مصاريف المناسبات فقط (المصاريف العامة خارج الحساب حالياً ولها قسمها الخاص) · دفعة لم تُسجَّل في السجل لا تظهر هنا — المناسبات المُقامة وعليها متبقٍ تجدها في «المتأخرات»</div></div>`;
+    <div class="secnote">الدخل المتوقع = أسعار مناسبات الشهر (مؤكد/مكتمل بتاريخ المناسبة) · المقبوض = سجل المدفوعات بتاريخ القبض — عربون، دفعة أو إكرامية، أياً كان شهر مناسبته · الصافي = المقبوض − مصاريف المناسبات فقط (المصاريف العامة خارج الحساب حالياً ولها قسمها الخاص) · دفعة لم تُسجَّل في السجل لا تظهر هنا — المناسبات المُقامة وعليها متبقٍ تجدها في «المتأخرات»</div></div>`;
 
   // سجل المدفوعات: filters + the log. The rows land via renderPayRows().
   const methods = (state.meta && state.meta.options.payment_method) || [];
@@ -947,6 +947,7 @@ function renderFinance() {
       <div class="kpi"><b>${money(k.revenue)}</b><span>إيرادات متوقعة (أسعار الحجوزات)</span></div>
       <div class="kpi gold"><b>${money(received)}</b><span>محصّل فعلياً (مدفوعات + عرابين)</span></div>
       ${PAY ? `<div class="kpi"><b>${money(PAY.kpi.month_now)}</b><span>محصّل هذا الشهر (سجل المدفوعات)</span></div>` : ''}
+      ${PAY && PAY.kpi.tips ? `<div class="kpi"><b>${money(PAY.kpi.tips)}</b><span>🎁 إكراميات — خارج حساب الحجوزات</span></div>` : ''}
       <div class="kpi"><b>${money((k.ev_expenses || 0) + (k.gen_expenses || 0))}</b><span>إجمالي المصاريف</span></div>
       <div class="kpi gold"><b class="${net >= 0 ? 'pos' : 'neg'}">${money(net)}</b><span>صافي الدخل (من المحصّل فعلياً)</span></div>
     </section>
@@ -990,7 +991,8 @@ function renderFinance() {
     ${sec('fin_years', '📊 السنوات — مالياً', yHead, yearsBody, true)}
     ${sec('fin_months', '🗓 الأشهر — المقبوضات وصافي الدخل', mHead, monthsBody, true)}
     ${PAY ? sec('fin_pay', '💳 سجل المدفوعات',
-      `${PAY.kpi.n} دفعة · إجمالي مسجّل <b class="pos">${money(PAY.kpi.total)}</b> · هذا الشهر <b>${money(PAY.kpi.month_now)}</b>`,
+      `${PAY.kpi.n} دفعة · إجمالي مسجّل <b class="pos">${money(PAY.kpi.total)}</b> · هذا الشهر <b>${money(PAY.kpi.month_now)}</b>${
+        PAY.kpi.tips ? ` · 🎁 إكرامية <b>${money(PAY.kpi.tips)}</b>` : ''}`,
       ledgerBody, true) : ''}
     ${sec('fin_adv', '💰 عرابين محصّلة — حجوزات قادمة',
       `${adv.length} حجزاً · محصّل مقدماً <b class="pos">${money(advIn)}</b> · متبقٍ للتحصيل <b>${money(advDue)}</b>`,
@@ -1840,7 +1842,10 @@ async function loadIntel() {
 // of the drawer's حفظ. The server moves العربون/المتبقي (and the event's P&L row) by the
 // exact amount; the fresh values land straight back in the open form so what the owner
 // sees is always what is stored.
-const PAY_KINDS = ['عربون', 'دفعة'];
+// إكرامية = a tip: recorded as cash in hand (ledger + sums) but never counted toward
+// the booking — no deposit/remaining/receipt movement (server rule in payments.js).
+const PAY_KINDS = ['عربون', 'دفعة', 'إكرامية'];
+const isTip = (p) => p.kind === 'إكرامية';
 
 // مرجع الدفع placeholder follows the chosen method — a bank transfer wants the payer's
 // account details / reference number, a check wants its number, a card its last digits.
@@ -1866,18 +1871,23 @@ async function loadPayments(bookingId) {
 function renderPayments(bookingId, list) {
   const box = $('#paybox');
   if (!box || state.editing !== bookingId) return;
-  const total = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  state.payTotal = list.length ? total : null;
+  // Tips stay out of the booking's arithmetic — المجموع and the auto-recalc of المتبقي
+  // count real payments only; the tip sum is shown on its own.
+  const real = list.filter((p) => !isTip(p));
+  const total = real.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const tips = list.reduce((s, p) => s + (isTip(p) ? Number(p.amount) || 0 : 0), 0);
+  state.payTotal = real.length ? total : null;
   const methods = state.meta.options.payment_method || [];
   const st = $('#f_status') ? $('#f_status').value : '';
-  const hint = list.length && (st === 'استفسار' || st === 'عرض سعر')
+  const hint = real.length && (st === 'استفسار' || st === 'عرض سعر')
     ? '<div class="muted" style="font-size:.76rem">💡 وصلت دفعة والحالة ما زالت «' + esc(st) + '» — غيّرها إلى «دفع العربون» أو «مؤكد» ثم احفظ</div>' : '';
   box.innerHTML = `
     <div class="payhead"><b>💳 المدفوعات</b><span class="muted">${
-      list.length ? `${list.length} دفعة · المجموع <b class="pos">${money(total)}</b>` : 'لا دفعات مسجّلة بعد'}</span></div>
+      list.length ? `${list.length} دفعة · المجموع <b class="pos">${money(total)}</b>${
+        tips ? ` · 🎁 إكرامية <b class="pos">${money(tips)}</b>` : ''}` : 'لا دفعات مسجّلة بعد'}</span></div>
     ${list.map((p) => `<div class="payrow">
       <span class="num muted">${dmy(p.paid_on)}</span>
-      <span>${esc(p.kind || 'دفعة')}${p.method ? ` · ${esc(p.method)}` : ''}</span>
+      <span>${isTip(p) ? '🎁 ' : ''}${esc(p.kind || 'دفعة')}${p.method ? ` · ${esc(p.method)}` : ''}</span>
       ${p.payer ? `<span class="muted" title="من دفع فعلياً">👤 ${esc(p.payer)}</span>` : ''}
       <b class="${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</b>
       ${p.doc_number ? `<span class="muted num" title="مستند صادر">🧾 ${esc(p.doc_number)}</span>` : ''}
@@ -1886,8 +1896,8 @@ function renderPayments(bookingId, list) {
     </div>`).join('')}
     <div class="payform">
       <input id="p_amount" type="number" step="any" inputmode="decimal" placeholder="المبلغ ₪">
-      <select id="p_kind" title="عربون يُضاف لحقل العربون — دفعة تُنقص المتبقي فقط">${
-        PAY_KINDS.map((k) => `<option${(list.length ? k === 'دفعة' : k === 'عربون') ? ' selected' : ''}>${k}</option>`).join('')}</select>
+      <select id="p_kind" title="عربون يُضاف لحقل العربون — دفعة تُنقص المتبقي فقط — إكرامية تُسجَّل كنقد إضافي ولا تمسّ حساب الحجز">${
+        PAY_KINDS.map((k) => `<option${(real.length ? k === 'دفعة' : k === 'عربون') ? ' selected' : ''}>${k}</option>`).join('')}</select>
       <select id="p_method"><option value="">طريقة الدفع…</option>${methods.map((m) => `<option>${esc(m)}</option>`).join('')}</select>
       <input id="p_date" type="date" value="${localISO()}">
       <input id="p_payer" placeholder="اسم الدافع — إن لم يكن صاحب الحجز" title="يُترك فارغاً عندما يدفع صاحب الحجز بنفسه">
@@ -1904,16 +1914,18 @@ function renderPayments(bookingId, list) {
     const amount = parseFloat($('#p_amount').value);
     if (!Number.isFinite(amount) || amount === 0) { toast('اكتب مبلغ الدفعة أولاً', true); return; }
     const btn = $('#payAdd');
+    const kind = $('#p_kind').value;
     btn.disabled = true;
     try {
       const r = await api('/office/api/payments', { method: 'POST', body: JSON.stringify({
         booking_id: bookingId, amount,
-        kind: $('#p_kind').value, method: $('#p_method').value,
+        kind, method: $('#p_method').value,
         paid_on: $('#p_date').value, note: $('#p_note').value,
         payer: $('#p_payer').value, method_ref: $('#p_ref').value,
       }) });
       afterPayMutation(bookingId, r);
-      toast('سُجّلت الدفعة ✓ — حُدّث العربون والمتبقي');
+      toast(kind === 'إكرامية'
+        ? 'سُجّلت الإكرامية ✓ — خارج حساب الحجز' : 'سُجّلت الدفعة ✓ — حُدّث العربون والمتبقي');
     } catch (e) {
       if (e.message !== 'unauthorized') toast('لم تُسجّل الدفعة — تحقق من القيم', true);
       btn.disabled = false;
@@ -1921,7 +1933,9 @@ function renderPayments(bookingId, list) {
   };
   $$('.paydel', box).forEach((el) => el.onclick = async () => {
     const p = list.find((x) => x.id === Number(el.dataset.id));
-    if (!p || !confirm(`حذف دفعة ${money(p.amount)}؟ سيعود المبلغ إلى المتبقي.`)) return;
+    if (!p || !confirm(isTip(p)
+      ? `حذف الإكرامية ${money(p.amount)}؟`
+      : `حذف دفعة ${money(p.amount)}؟ سيعود المبلغ إلى المتبقي.`)) return;
     try {
       const r = await api('/office/api/payments', { method: 'DELETE', body: JSON.stringify({ id: p.id }) });
       afterPayMutation(bookingId, r);

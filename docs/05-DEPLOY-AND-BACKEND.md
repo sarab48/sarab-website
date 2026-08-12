@@ -901,3 +901,36 @@ of the monthly net for now (they keep their own section; may join later).
 - Also from this exchange: **never write Arabic script in terminal answers** — the
   owner's terminal renders RTL backward (memory `no-arabic-in-terminal`).
 - `_vpayments.mjs` all 24 checks pass; deployed b443d284, apex 200 + office 302.
+
+### 2026-08-12 (3rd) — إكرامية payment kind + the split-transfer data fix
+
+Owner asked for (a) a **tip** option in المدفوعات — tips received at events must be
+recorded as cash in hand but never billed to the client, and (b) the right way to
+record one 600 ₪ bank transfer that paid the advances of TWO bookings (SARAB-024
+event 29.07 + SARAB-025 event 02.08, 300 ₪ each).
+
+- New payment kind **إكرامية** (tip), third in `PAY_KINDS`. Server rule (payments.js):
+  a tip's effective amount toward the booking is **zero** — POST/PATCH/DELETE never
+  move deposit/remaining/event-P&L for it, kind flips دفعة↔إكرامية re-sync by exact
+  delta, and the derived-remaining subquery (price − Σledger) excludes tips. Tips DO
+  count in the ledger sums/byMonth/byMethod and in the monthly المقبوض (real cash in),
+  plus their own `kpi.tips`. UI: tip rows wear 🎁, the drawer panel counts المجموع
+  from real payments only and shows الإكرامية apart (same in the سجل المدفوعات section
+  head + a KPI tile that appears only when tips exist), toast/delete-confirm wording
+  matches, and the future receipt automation must SKIP tips (noted in payments.js).
+- **Split transfer recorded (remote data fix, backup first)**: the owner had recorded
+  the whole 600 ₪ on SARAB-024 (remaining −300) and nothing of it on SARAB-025
+  (remaining +300). Fix (`ops/db-backups/2026-08-12-pre-transfer-split/fix.sql`, every
+  statement guarded to exact row+value): payment 63 → 300 ₪, new payment 74 = 300 ₪
+  عربون on SARAB-025 sharing paid_on 2026-06-24 + payer + method_ref 063195749 — the
+  ledger convention for one real transfer across bookings is **same method_ref on all
+  its halves** (search the ref → both rows, matched Σ = 600). Also corrected two slips
+  in the same day's entries: payment 64 paid_on 2026-08-29 (impossible future date) →
+  2026-07-29 (event day), payment 65 kind عربون (form default) → دفعة. Totals set to
+  what the API deltas would have produced: both bookings deposit 300 / remaining 0,
+  both P&L rows paid 1800 (net 1151 / 1172). Diff-verified vs backup: exactly rows
+  63/64/65 changed + row 74 added, 277 bookings untouched.
+- Tests: `_vpayments.mjs` grew to 35 checks (tip inert on POST/PATCH/DELETE, kind-flip
+  deltas both ways, derived remaining skips tips, tip never enters P&L, kpi.tips,
+  kind=إكرامية filter, UI tip record leaves العربون/المتبقي standing + header shows
+  the tip apart). All pass locally.

@@ -14,6 +14,11 @@
   2026-08-12) and the payment's paper trail (method_ref: bank account / transfer
   reference / check number) — the receipt automation will name the actual payer.
 
+  إكرامية (tip, 2026-08-12): cash the owner wants counted in-hand but that is NOT the
+  client's money against the booking — it never moves deposit/remaining/event P&L and
+  the receipt automation must skip it (a tip is not part of the client's receipt). It
+  does count in the ledger sums (byMonth/byMethod/KPIs): it is real cash received.
+
   The stored running totals keep working exactly as before — they are synced by exact
   deltas on every mutation, never rebuilt: recording a payment decrements
   bookings.remaining, an عربون also increments bookings.deposit, and the booking's
@@ -36,6 +41,11 @@ const txt = (v, max) => {
 }
 const today = () => new Date().toISOString().slice(0, 10)
 
+// A tip's effective amount toward the booking's totals is zero — it is extra cash on
+// the side, not payment of the price.
+const TIP = 'إكرامية'
+const eff = (kind, amount) => (kind === TIP ? 0 : amount)
+
 // Exact-delta sync of the running totals a payment mutation affects. remaining falls
 // by the amount when it is tracked; a booking that never tracked remaining but has a
 // price gets it derived from the ledger (price − Σ payments, computed AFTER the
@@ -47,7 +57,8 @@ async function applyDelta(env, bookingId, dAmount, dDeposit) {
        deposit = CASE WHEN ?1 != 0 THEN COALESCE(deposit, 0) + ?1 ELSE deposit END,
        remaining = CASE
          WHEN remaining IS NOT NULL THEN remaining - ?2
-         WHEN price IS NOT NULL THEN price - (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE booking_id = ?3)
+         WHEN price IS NOT NULL THEN price - (SELECT COALESCE(SUM(amount), 0) FROM payments
+                                              WHERE booking_id = ?3 AND COALESCE(kind, '') != 'إكرامية')
          ELSE NULL END
      WHERE id = ?3`
   ).bind(dDeposit, dAmount, bookingId).run()
@@ -104,7 +115,8 @@ async function globalPayload(env, f = {}) {
       (SELECT COALESCE(SUM(amount), 0) FROM payments) AS total,
       (SELECT COUNT(*) FROM payments) AS n,
       (SELECT COALESCE(SUM(amount), 0) FROM payments
-         WHERE substr(paid_on, 1, 7) = strftime('%Y-%m', 'now')) AS month_now`),
+         WHERE substr(paid_on, 1, 7) = strftime('%Y-%m', 'now')) AS month_now,
+      (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE kind = 'إكرامية') AS tips`),
     // Events that already happened and still owe money — nowhere else surfaces these
     // (the advances table and the التحليلات call list only look forward).
     env.DB.prepare(`SELECT id, booking_no, name, first_name, last_name, phone, city,
@@ -159,7 +171,8 @@ export async function onRequestPost({ request, env }) {
     `INSERT INTO payments (booking_id, amount, kind, method, paid_on, note, payer, method_ref)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
   ).bind(bookingId, amount, kind, method, paid_on, note, payer, method_ref).run()
-  await applyDelta(env, bookingId, amount, kind === 'عربون' ? amount : 0)
+  const dAmount = eff(kind, amount)
+  if (dAmount) await applyDelta(env, bookingId, dAmount, kind === 'عربون' ? amount : 0)
   return Response.json(await bookingPayload(env, bookingId))
 }
 
@@ -190,7 +203,7 @@ export async function onRequestPatch({ request, env }) {
        payer = ?6, method_ref = ?7 WHERE id = ?8`
   ).bind(amount, kind, method, paid_on, note, payer, method_ref, id).run()
 
-  const dAmount = amount - old.amount
+  const dAmount = eff(kind, amount) - eff(old.kind, old.amount)
   const dDeposit = (kind === 'عربون' ? amount : 0) - (old.kind === 'عربون' ? old.amount : 0)
   if (dAmount || dDeposit) await applyDelta(env, old.booking_id, dAmount, dDeposit)
   return Response.json(await bookingPayload(env, old.booking_id))
@@ -205,6 +218,7 @@ export async function onRequestDelete({ request, env }) {
   if (!old) return bad('not-found', 404)
   if (old.doc_number) return bad('has-document')
   await env.DB.prepare('DELETE FROM payments WHERE id = ?1').bind(id).run()
-  await applyDelta(env, old.booking_id, -old.amount, old.kind === 'عربون' ? -old.amount : 0)
+  const dAmount = eff(old.kind, old.amount)
+  if (dAmount) await applyDelta(env, old.booking_id, -dAmount, old.kind === 'عربون' ? -old.amount : 0)
   return Response.json(await bookingPayload(env, old.booking_id))
 }
