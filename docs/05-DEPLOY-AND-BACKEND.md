@@ -881,3 +881,23 @@ inside collapsible sections.
   (no horizontal overflow, RTL correct).
 - Deployed 03114bc4; probes: apex/www 200, /office + API 302 behind Access, both Pages
   secrets intact.
+
+### 2026-08-12 (2nd) — الأشهر table refined to the owner's monthly rule
+
+Owner feedback on the first cut: a month must show its **expected income** (the prices
+of that month's events — August looked tiny because only recorded cash showed), the
+**cash actually received during the month** (advance or full payment, whichever event
+it belongs to), and **net = received − event expenses ONLY** — general expenses are out
+of the monthly net for now (they keep their own section; may join later).
+
+- finance.js `byMonth` gained `expected` (Σ price of confirmed/completed by event
+  month — future months now appear as soon as they hold bookings) and `net` dropped
+  `gen_expenses` from the subtraction (still returned per month, just not in net).
+- الأشهر table columns now: month (with a «هذا الشهر» marker) · events · expected ·
+  received-in-month · event expenses · net. Section head pins the CURRENT month
+  (bm[0] can be a future month now), tfoot totals follow, and the footnote spells out
+  every rule incl. "an unrecorded payment shows nothing here — held events still owed
+  live in المتأخرات".
+- Also from this exchange: **never write Arabic script in terminal answers** — the
+  owner's terminal renders RTL backward (memory `no-arabic-in-terminal`).
+- `_vpayments.mjs` all 24 checks pass; deployed b443d284, apex 200 + office 302.

@@ -890,9 +890,12 @@ function renderFinance() {
   const mYears = [...new Set(bm.map((m) => m.k.slice(0, 4)))].sort().reverse();
   if (finMonthYear === null) finMonthYear = mYears.includes(thisYear) ? thisYear : '';
   const bmShown = finMonthYear ? bm.filter((m) => m.k.startsWith(finMonthYear)) : bm;
-  const mLatest = bm[0];
-  const mHead = mLatest
-    ? `آخر شهر (${finMonthName(mLatest.k)}): مقبوضات <b>${money(mLatest.collected)}</b> · صافي <b>${money(mLatest.net)}</b>`
+  // The head pins the CURRENT month (bm[0] can be a future month once expected income
+  // puts months-to-come in the table), falling back to the latest month that has data.
+  const curM = localISO().slice(0, 7);
+  const mNow = bm.find((m) => m.k === curM) || bm.find((m) => m.k < curM) || bm[0];
+  const mHead = mNow
+    ? `${finMonthName(mNow.k)}: متوقع <b>${money(mNow.expected)}</b> · قُبض <b class="pos">${money(mNow.collected)}</b> · صافي <b>${money(mNow.net)}</b>`
     : 'لا مقبوضات مسجّلة بعد';
   const monthsBody = `
     ${mYears.length > 1 ? `<div class="chips" style="padding:.55rem .8rem 0">
@@ -900,22 +903,23 @@ function renderFinance() {
       ${mYears.map((y) => `<button class="chip${finMonthYear === y ? ' on' : ''}" data-fmy="${y}">${y}</button>`).join('')}
     </div>` : ''}
     <div class="tablebox" id="finmonths"><table style="min-width:0">
-      <thead><tr><th>الشهر</th><th>مناسبات أُقيمت/تُقام</th><th>المقبوضات</th><th>المصاريف</th><th>صافي الدخل</th></tr></thead>
+      <thead><tr><th>الشهر</th><th>مناسبات الشهر</th><th>الدخل المتوقع (أسعار مناسباته)</th><th>المقبوض فعلياً في الشهر</th><th>مصاريف المناسبات</th><th>صافي الدخل (من المقبوض)</th></tr></thead>
       <tbody>${bmShown.map((m) => `<tr>
-        <td><b>${finMonthName(m.k)}</b></td>
+        <td><b>${finMonthName(m.k)}</b>${m.k === curM ? ' <span class="muted" style="font-size:.7rem">هذا الشهر</span>' : ''}</td>
         <td class="num">${m.events || '—'}</td>
+        <td class="num">${money(m.expected)}</td>
         <td class="num pos">${money(m.collected)}</td>
-        <td class="num${(m.ev_expenses + m.gen_expenses) > 0 ? ' neg' : ''}"
-            title="مصاريف مناسبات ${money(m.ev_expenses)} + مصاريف عامة ${money(m.gen_expenses)}">${money(m.ev_expenses + m.gen_expenses)}</td>
+        <td class="num${m.ev_expenses > 0 ? ' neg' : ''}">${money(m.ev_expenses)}</td>
         <td class="num ${m.net >= 0 ? 'pos' : 'neg'}"><b>${money(m.net)}</b></td>
-      </tr>`).join('') || '<tr><td colspan="5"><div class="empty">لا بيانات في هذه الفترة</div></td></tr>'}</tbody>
+      </tr>`).join('') || '<tr><td colspan="6"><div class="empty">لا بيانات في هذه الفترة</div></td></tr>'}</tbody>
       ${bmShown.length > 1 ? `<tfoot><tr><td>المجموع (${bmShown.length} شهر)</td>
         <td class="num">${sumCol(bmShown, 'events')}</td>
+        <td class="num">${money(sumCol(bmShown, 'expected'))}</td>
         <td class="num pos">${money(sumCol(bmShown, 'collected'))}</td>
-        <td class="num">${money(sumCol(bmShown, 'ev_expenses') + sumCol(bmShown, 'gen_expenses'))}</td>
+        <td class="num">${money(sumCol(bmShown, 'ev_expenses'))}</td>
         <td class="num">${money(sumCol(bmShown, 'net'))}</td></tr></tfoot>` : ''}
     </table>
-    <div class="secnote">المقبوضات = سجل المدفوعات بتاريخ القبض · المصاريف = مصاريف المناسبات (بشهر المناسبة) + المصاريف العامة (بتاريخها) · الصافي = المقبوضات − المصاريف · المناسبات = مؤكد/مكتمل بشهر المناسبة</div></div>`;
+    <div class="secnote">الدخل المتوقع = أسعار مناسبات الشهر (مؤكد/مكتمل بتاريخ المناسبة) · المقبوض = سجل المدفوعات بتاريخ القبض — عربون أو دفعة، أياً كان شهر مناسبته · الصافي = المقبوض − مصاريف المناسبات فقط (المصاريف العامة خارج الحساب حالياً ولها قسمها الخاص) · دفعة لم تُسجَّل في السجل لا تظهر هنا — المناسبات المُقامة وعليها متبقٍ تجدها في «المتأخرات»</div></div>`;
 
   // سجل المدفوعات: filters + the log. The rows land via renderPayRows().
   const methods = (state.meta && state.meta.options.payment_method) || [];

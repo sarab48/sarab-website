@@ -31,7 +31,7 @@ const val = (k, v, nums) => {
 const COLLECTED = `COALESCE(price - COALESCE(remaining, 0), COALESCE(deposit, 0))`
 
 async function payload(env) {
-  const [ev, gen, kpi, adv, miss, byYear, mPay, mEvExp, mGenExp, mEvents] = await env.DB.batch([
+  const [ev, gen, kpi, adv, miss, byYear, mPay, mEvExp, mGenExp, mEvents, mExpected] = await env.DB.batch([
     env.DB.prepare('SELECT * FROM event_finances ORDER BY (event_date IS NULL), event_date DESC, id DESC'),
     env.DB.prepare('SELECT * FROM general_expenses ORDER BY (date IS NULL), date DESC, id DESC'),
     env.DB.prepare(`SELECT
@@ -90,14 +90,20 @@ async function payload(env) {
                     WHERE status IN ('مؤكد','مكتمل')
                       AND event_date IS NOT NULL AND length(event_date) >= 7
                     GROUP BY k`),
+    env.DB.prepare(`SELECT substr(event_date, 1, 7) AS k, COALESCE(SUM(price), 0) AS v
+                    FROM bookings
+                    WHERE status IN ('مؤكد','مكتمل')
+                      AND event_date IS NOT NULL AND length(event_date) >= 7
+                    GROUP BY k`),
   ])
-  // Merge the month slices; net follows the owner's rule — money actually received
-  // that month minus the expenses attributed to it.
+  // Merge the month slices; net follows the owner's rule (2026-08-12): money actually
+  // received that month minus the EVENT expenses only — general expenses stay out of
+  // the monthly net for now (they keep their own section) and may join later.
   const months = new Map()
   const fold = (rows, field) => {
     for (const r of rows) {
       if (!/^\d{4}-\d{2}$/.test(r.k || '')) continue
-      const o = months.get(r.k) || { k: r.k, collected: 0, ev_expenses: 0, gen_expenses: 0, events: 0 }
+      const o = months.get(r.k) || { k: r.k, collected: 0, ev_expenses: 0, gen_expenses: 0, events: 0, expected: 0 }
       o[field] += Number(r.v) || 0
       months.set(r.k, o)
     }
@@ -106,8 +112,9 @@ async function payload(env) {
   fold(mEvExp.results, 'ev_expenses')
   fold(mGenExp.results, 'gen_expenses')
   fold(mEvents.results, 'events')
+  fold(mExpected.results, 'expected')
   const byMonth = [...months.values()]
-    .map((m) => ({ ...m, net: m.collected - m.ev_expenses - m.gen_expenses }))
+    .map((m) => ({ ...m, net: m.collected - m.ev_expenses }))
     .sort((a, b) => b.k.localeCompare(a.k))
   return {
     ok: true,
