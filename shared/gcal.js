@@ -21,6 +21,8 @@
   or a revoked key all degrade to "the booking saved, the calendar didn't get it".
 */
 
+import { displayName } from './names.js'
+
 const SCOPE = 'https://www.googleapis.com/auth/calendar'
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_API_BASE = 'https://www.googleapis.com/calendar/v3'
@@ -115,13 +117,9 @@ async function calendarFetch(env, path, init = {}) {
 // ---------- the event we put in the calendar ----------
 
 const trim = (v) => String(v ?? '').trim()
-// The fullest name available — same rule as the dashboard's fullName().
-function personName(row) {
-  const parts = [row.first_name, row.last_name].filter(Boolean).join(' ').trim()
-  const nm = trim(row.name)
-  if (parts && (!nm || parts.length >= nm.length)) return parts
-  return nm || parts || 'بدون اسم'
-}
+// Same rule as the dashboard's fullName() (owner's rule 2026-08-19): the name the owner
+// wrote (first/last) always wins; `name` (WhatsApp profile / website form) is fallback.
+const personName = (row) => displayName(row) || 'بدون اسم'
 
 const HHMM = /^\s*(\d{1,2})[:.](\d{2})/
 function parseTime(v) {

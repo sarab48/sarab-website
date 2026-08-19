@@ -91,7 +91,10 @@ async function globalPayload(env, f = {}) {
   if (f.kind) add(`p.kind = ?`, f.kind)
   if (f.q) {
     const like = `%${f.q}%`
-    conds.push(`(b.name LIKE ?${binds.length + 1} OR (b.first_name || ' ' || b.last_name) LIKE ?${binds.length + 1}
+    // COALESCE per part: `first || ' ' || last` is NULL in SQLite when either half is
+    // NULL, which silently dropped rows where the owner wrote only one of the two.
+    conds.push(`(b.name LIKE ?${binds.length + 1}
+      OR TRIM(COALESCE(b.first_name, '') || ' ' || COALESCE(b.last_name, '')) LIKE ?${binds.length + 1}
       OR p.payer LIKE ?${binds.length + 1} OR p.note LIKE ?${binds.length + 1}
       OR p.method_ref LIKE ?${binds.length + 1} OR b.booking_no LIKE ?${binds.length + 1})`)
     binds.push(like)

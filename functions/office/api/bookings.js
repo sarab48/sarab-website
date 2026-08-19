@@ -4,6 +4,7 @@
 */
 import { normalizeCity } from '../../../shared/intel.js'
 import { syncBookingCalendar } from '../../../shared/gcal.js'
+import { displayName } from '../../../shared/names.js'
 
 // Fields the office may write. Numbers are coerced; anything else is text.
 const WRITABLE = [
@@ -86,7 +87,7 @@ export async function ensureEventFinance(env, row) {
     `INSERT INTO event_finances
        (booking_no, event_date, city, client, price, paid, total_expenses, net_profit)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7)`
-  ).bind(row.booking_no, row.event_date || null, row.city || null, row.name || null,
+  ).bind(row.booking_no, row.event_date || null, row.city || null, displayName(row) || null,
     priceVal, paid, paid ?? 0).run()
 }
 

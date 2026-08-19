@@ -484,17 +484,13 @@ const staffCell = (r) => {
   return Number.isFinite(n) && n > 0 ? `<span class="muted">${n} عمال</span>` : '—';
 };
 
-// The fullest name we can show. The office edits first_name/last_name but the legacy
-// `name` field (set once from the website form) is never re-synced — so a record can
-// carry both a short/blank `name` and a complete first+last. Prefer first+last when both
-// are present (never shortening a longer stored name, e.g. a 3-part website name), then
-// fall back to `name`, then to whichever part exists. Fixes short names in the grid and
-// blank names in CAPI.
+// The owner's rule (2026-08-19): the name written in the office's own fields
+// (الاسم الأول / اسم العائلة) ALWAYS wins — the legacy `name` field holds whatever
+// WhatsApp's profile or the website form reported, and is only the fallback for
+// records the owner never named by hand. Same rule server-side (shared/names.js).
 const fullName = (r) => {
   const parts = [r.first_name, r.last_name].filter(Boolean).join(' ').trim();
-  const nm = String(r.name || '').trim();
-  if (parts && (!nm || parts.length >= nm.length)) return parts;
-  return nm || parts || '—';
+  return parts || String(r.name || '').trim() || '—';
 };
 
 function toast(msg, err=false) {

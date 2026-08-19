@@ -4,6 +4,7 @@
   - cityMatch: free-text location → known city → tier price.
   Review-ready data for the owner, never a hard rule — he decides.
 */
+import { nameSql } from './names.js'
 
 export function normalizeCity(s) {
   return String(s || '')
@@ -14,7 +15,7 @@ export function normalizeCity(s) {
 
 export async function dateConflicts(db, date, excludeId) {
   if (!date) return []
-  const base = `SELECT id, booking_no, name, status, start_time, city FROM bookings
+  const base = `SELECT id, booking_no, ${nameSql()} AS name, status, start_time, city FROM bookings
                 WHERE event_date = ?1 AND status IN ('مؤكد','دفع العربون','مكتمل')`
   const stmt = excludeId
     ? db.prepare(base + ' AND id != ?2 ORDER BY id').bind(date, excludeId)

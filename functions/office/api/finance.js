@@ -7,6 +7,7 @@
   Auth: ../_middleware.js.
 */
 import { ensureBookingNo, ensureEventFinance } from './bookings.js'
+import { nameSql } from '../../../shared/names.js'
 
 const EV_FIELDS = ['booking_no', 'event_date', 'city', 'client', 'price', 'paid', 'worker1',
   'worker2', 'hours_cost', 'transport', 'printing', 'other', 'tax_pct', 'tax_value']
@@ -32,7 +33,15 @@ const COLLECTED = `COALESCE(price - COALESCE(remaining, 0), COALESCE(deposit, 0)
 
 async function payload(env) {
   const [ev, gen, kpi, adv, miss, byYear, mPay, mEvExp, mGenExp, mEvents, mExpected] = await env.DB.batch([
-    env.DB.prepare('SELECT * FROM event_finances ORDER BY (event_date IS NULL), event_date DESC, id DESC'),
+    // The client column follows the booking (linked by SARAB-NNN): the owner-written
+    // first+last wins over whatever the row was seeded with — WhatsApp-profile names
+    // stop showing the moment the owner names the client on the booking itself. The
+    // stored client is only touched when the owner edits the row, never rewritten here.
+    env.DB.prepare(`SELECT f.*, COALESCE(NULLIF(TRIM(COALESCE(b.first_name, '') || ' ' ||
+                             COALESCE(b.last_name, '')), ''), f.client, b.name) AS client_display
+                    FROM event_finances f
+                    LEFT JOIN bookings b ON b.booking_no = f.booking_no
+                    ORDER BY (f.event_date IS NULL), f.event_date DESC, f.id DESC`),
     env.DB.prepare('SELECT * FROM general_expenses ORDER BY (date IS NULL), date DESC, id DESC'),
     env.DB.prepare(`SELECT
       (SELECT COALESCE(SUM(price),0)   FROM bookings WHERE status IN ('مؤكد','دفع العربون','مكتمل')) AS revenue,
@@ -43,7 +52,7 @@ async function payload(env) {
     // Advances (عربون) already collected on confirmed bookings that haven't happened yet —
     // cash in hand. Listed on its own so the owner sees collected vs. still-to-collect,
     // separate from the completed-events P&L (which handles done events).
-    env.DB.prepare(`SELECT booking_no, event_date, city, name AS client, price, deposit, remaining, status
+    env.DB.prepare(`SELECT booking_no, event_date, city, ${nameSql()} AS client, price, deposit, remaining, status
                     FROM bookings
                     WHERE status IN ('مؤكد','دفع العربون') AND COALESCE(deposit, 0) > 0
                     ORDER BY (event_date IS NULL), event_date ASC, id ASC`),
@@ -51,7 +60,7 @@ async function payload(env) {
     // turns مكتمل), so anything here is a gap: an event the owner would otherwise be
     // calculating without. A booking with no booking_no can't match a finance row at all,
     // hence the NULL-safe comparison. Surfaced in the tab with a one-click add.
-    env.DB.prepare(`SELECT b.id, b.booking_no, b.event_date, b.city, b.name AS client,
+    env.DB.prepare(`SELECT b.id, b.booking_no, b.event_date, b.city, ${nameSql('b.')} AS client,
                            b.price, b.deposit, b.remaining
                     FROM bookings b
                     WHERE b.status = 'مكتمل'
@@ -118,7 +127,7 @@ async function payload(env) {
     .sort((a, b) => b.k.localeCompare(a.k))
   return {
     ok: true,
-    events: ev.results,
+    events: ev.results.map(({ client_display, ...r }) => ({ ...r, client: client_display ?? r.client })),
     general: gen.results,
     kpi: kpi.results[0],
     advances: adv.results,

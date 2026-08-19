@@ -15,6 +15,7 @@
   "what happens in 2026".
   Auth: ../_middleware.js.
 */
+import { nameSql } from '../../../shared/names.js'
 
 const CONFIRMED = "('مؤكد','مكتمل')"
 const REAL = "('مؤكد','مكتمل','دفع العربون')"
@@ -94,7 +95,7 @@ export async function onRequestGet({ request, env }) {
       GROUP BY k ORDER BY k`),
     // للتحصيل: upcoming events still owing money — the call list. Confirmed and deposit
     // rows both listed (the status column keeps them apart), soonest first.
-    env.DB.prepare(`SELECT id, booking_no, name, phone, event_date, city, status,
+    env.DB.prepare(`SELECT id, booking_no, ${nameSql()} AS name, phone, event_date, city, status,
       price, deposit, remaining
       FROM bookings
       WHERE status IN ${REAL} AND ${upcoming} AND COALESCE(remaining, 0) > 0 ${scope}
@@ -102,7 +103,7 @@ export async function onRequestGet({ request, env }) {
     // بيانات ناقصة (always global): records missing the fields the analyses lean on.
     // Occasion/booking-date only matter once it's a real booking; source and phone
     // matter for every live lead.
-    env.DB.prepare(`SELECT id, booking_no, name, event_date, status,
+    env.DB.prepare(`SELECT id, booking_no, ${nameSql()} AS name, event_date, status,
       CASE WHEN ${noVal('occasion')} AND status IN ${REAL} THEN 1 ELSE 0 END AS miss_occasion,
       CASE WHEN ${noVal('lead_source')} THEN 1 ELSE 0 END AS miss_source,
       CASE WHEN ${noVal('phone')} THEN 1 ELSE 0 END AS miss_phone,

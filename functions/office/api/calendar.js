@@ -7,6 +7,7 @@
 */
 import { BOOKED_STATUSES } from './bookings.js'
 import { calendarConfigured, calendarProbe, syncBookingCalendar } from '../../../shared/gcal.js'
+import { displayName } from '../../../shared/names.js'
 
 const IN_BOOKED = BOOKED_STATUSES.map(() => '?').join(',')
 // Everything whose calendar state disagrees with its booking state, in one query:
@@ -37,7 +38,7 @@ export async function onRequestGet({ env }) {
     linked: linked?.n || 0,
     pending: pending.results.length,
     pending_rows: pending.results.slice(0, 20).map((r) => ({
-      id: r.id, booking_no: r.booking_no, name: r.name, event_date: r.event_date, status: r.status,
+      id: r.id, booking_no: r.booking_no, name: displayName(r) || null, event_date: r.event_date, status: r.status,
       action: r.gcal_event_id ? 'remove' : 'add',
     })),
   })
