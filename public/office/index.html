@@ -1245,22 +1245,55 @@ function renderInsights() {
     ${insScope.year || insScope.month ? '<div class="secnote">العملاء هنا = من تاريخ مناسبتهم ضمن الفترة المختارة</div>' : ''}`)}
 
     ${sec('ins_cities', '🏙 المدن — من أين يأتي العمل؟',
-      `${s.cities.length} مدينة · مرتّبة حسب عدد العملاء`,
+      `${s.cities.length} مدينة · اضغط على مدينة لعرض مصادر عملائها`,
       `<div class="tablebox"><table style="min-width:0">
       <thead><tr><th>المدينة</th><th>العملاء</th><th>حجوزات فعلية</th><th>نسبة التحويل</th><th>الإيرادات (أسعار)</th></tr></thead>
-      <tbody>${s.cities.map((c) => `<tr>
-        <td><b>${esc(c.k)}</b></td>
+      <tbody>${s.cities.map((c, i) => {
+        const srcs = (s.city_sources || []).filter((x) => x.k === c.k);
+        return `<tr data-cx="${i}" style="cursor:pointer">
+        <td><b>${esc(c.k)}</b> <span class="muted" style="font-size:.68rem">▾ المصادر</span></td>
         <td class="num">${c.clients}</td>
         <td class="num">${c.booked}</td>
         <td class="num">${c.clients ? (c.booked / c.clients * 100).toFixed(0) : 0}%</td>
         <td class="num">${money(c.revenue)}</td>
-      </tr>`).join('') || '<tr><td colspan="5"><div class="empty">لا بيانات بعد</div></td></tr>'}</tbody>
+      </tr>
+      <tr data-cxd="${i}" style="display:none"><td colspan="5" style="background:var(--panel-2);padding:.5rem .8rem">
+        <b style="font-size:.78rem">من أين جاء عملاء ${esc(c.k)}؟</b>
+        <table style="min-width:0;margin-top:.35rem">
+          <thead><tr><th>المصدر</th><th>العملاء</th><th>حجوزات مؤكدة</th><th>الإيرادات</th></tr></thead>
+          <tbody>${srcs.map((x) => `<tr>
+            <td>${esc(x.src)}</td>
+            <td class="num">${x.clients}</td>
+            <td class="num">${x.booked}</td>
+            <td class="num">${money(x.revenue)}</td>
+          </tr>`).join('') || '<tr><td colspan="4"><div class="empty">لا بيانات مصدر</div></td></tr>'}</tbody>
+        </table>
+      </td></tr>`;
+      }).join('') || '<tr><td colspan="5"><div class="empty">لا بيانات بعد</div></td></tr>'}</tbody>
       ${s.cities.length ? `<tfoot><tr><td>المجموع (${s.cities.length} مدينة)</td>
         <td class="num">${sumCol(s.cities, 'clients')}</td>
         <td class="num">${sumCol(s.cities, 'booked')}</td>
         <td class="num">${conv}%</td>
         <td class="num">${money(sumCol(s.cities, 'revenue'))}</td></tr></tfoot>` : ''}
-    </table></div>`)}
+    </table>
+    <div class="secnote">المدينة هنا = مدينة المناسبة (مكان الحدث) · اضغط على أي مدينة لتفصيل مصادر عملائها — أين تنجح الإعلانات؟</div></div>`)}
+
+    ${sec('ins_ccity', '🏠 مدن العملاء — أين يسكنون؟',
+      (s.client_cities || []).length
+        ? `${s.client_cities.length} مدينة · حسب حقل «مدينة العميل (السكن)» في بطاقة الحجز`
+        : 'حقل جديد في بطاقة الحجز — يُعبّأ يدوياً',
+      (s.client_cities || []).length ? `<div class="tablebox"><table style="min-width:0">
+      <thead><tr><th>مدينة السكن</th><th>العملاء</th><th>حجوزات فعلية</th><th>الإيرادات (أسعار)</th></tr></thead>
+      <tbody>${s.client_cities.map((c) => `<tr>
+        <td><b>${esc(c.k)}</b></td>
+        <td class="num">${c.clients}</td>
+        <td class="num">${c.booked}</td>
+        <td class="num">${money(c.revenue)}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <div class="secnote">يُحسب فقط لمن عُبّئت لهم «مدينة العميل» — مدينة المناسبة تبقى في الجدول أعلاه</div></div>`
+      : `<div class="empty" style="padding:1rem">حقل «مدينة العميل (السكن)» الجديد ما زال فارغاً.<br>
+         افتح أي حجز واكتب مدينة سكن العميل (حين تختلف عن مدينة المناسبة) — وسيظهر التحليل هنا تلقائياً.</div>`)}
 
     ${sec('ins_occ', '🎉 أنواع المناسبات',
       `${s.occasions.length} نوعاً · أيها يجلب أكثر حجوزات وإيرادات؟`,
@@ -1313,6 +1346,11 @@ function renderInsights() {
     setScope(insScope.year, r.dataset.mrow === insScope.month ? '' : r.dataset.mrow));
   // للتحصيل and بيانات ناقصة rows open the booking itself.
   $$('tr[data-open]', box).forEach((r) => r.onclick = () => openDrawerById(Number(r.dataset.open)));
+  // A city row unfolds its per-source breakdown right underneath.
+  $$('tr[data-cx]', box).forEach((r) => r.onclick = () => {
+    const d = $(`tr[data-cxd="${r.dataset.cx}"]`, box);
+    if (d) d.style.display = d.style.display === 'none' ? '' : 'none';
+  });
   $('#insCsv', box).onclick = () => {
     const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const L = [];
@@ -1335,6 +1373,11 @@ function renderInsights() {
       s.made.map((r) => [r.k, r.n, r.dep]));
     sec(`المدن — ${scopeLabel}`, ['المدينة', 'العملاء', 'حجوزات مؤكدة', 'الإيرادات'],
       s.cities.map((c) => [c.k, c.clients, c.booked, c.revenue]));
+    sec(`المدن × المصدر — ${scopeLabel}`, ['المدينة', 'المصدر', 'العملاء', 'حجوزات مؤكدة', 'الإيرادات'],
+      (s.city_sources || []).map((r) => [r.k, r.src, r.clients, r.booked, r.revenue]));
+    if ((s.client_cities || []).length)
+      sec(`مدن العملاء (السكن) — ${scopeLabel}`, ['مدينة السكن', 'العملاء', 'حجوزات مؤكدة', 'الإيرادات'],
+        s.client_cities.map((c) => [c.k, c.clients, c.booked, c.revenue]));
     sec(`المناسبات — ${scopeLabel}`, ['النوع', 'العملاء', 'حجوزات مؤكدة', 'الإيرادات'],
       s.occasions.map((c) => [c.k, c.clients, c.booked, c.revenue]));
     sec(`المصادر — ${scopeLabel}`, ['المصدر', 'العملاء', 'حجوزات مؤكدة'],
@@ -1571,6 +1614,72 @@ function campaignStats() {
   return [...byCamp.values()];
 }
 
+// Every Meta booking belongs to exactly one campaign row — the one carried in مصدر
+// العميل, else the base Meta entry (same folding rule as campaignStats).
+function campaignRowsOf(camp) {
+  const named = new Set(metaSources());
+  return CAPI_ROWS.filter((r) => fromMeta(r) && (named.has(r.lead_source) ? r.lead_source : LEGACY_META) === camp);
+}
+
+// What unfolds under a campaign row: which cities the campaign actually books in
+// (the ad-targeting question), the clients' home cities once the owner fills them,
+// the occasions it attracts, the funnel by status, and the latest leads it brought.
+function campaignDetailHtml(camp) {
+  const rows = campaignRowsOf(camp);
+  if (!rows.length) return '<div class="empty">لا عملاء على هذه الحملة بعد</div>';
+  const agg = (field) => {
+    const m = new Map();
+    for (const r of rows) {
+      const k = String(r[field] || '').trim() || 'غير محدد';
+      const s = m.get(k) || { k, leads: 0, conf: 0, adv: 0, val: 0 };
+      s.leads++;
+      if (r.status === 'مؤكد' || r.status === 'مكتمل') { s.conf++; s.val += Number(r.price) || 0; }
+      else if (r.status === 'دفع العربون') s.adv++;
+      m.set(k, s);
+    }
+    return [...m.values()].sort((a, b) => b.conf - a.conf || b.leads - a.leads);
+  };
+  const mini = (title, rows2) => `<div class="tablebox" style="flex:1 1 240px;min-width:0">
+    <b style="display:block;padding:.45rem .7rem .1rem;font-size:.8rem">${title}</b>
+    <table style="min-width:0">
+      <thead><tr><th>المدينة/النوع</th><th>عملاء</th><th>مؤكد</th><th>عربون</th><th>قيمة المؤكد</th></tr></thead>
+      <tbody>${rows2.map((c) => `<tr>
+        <td>${esc(c.k)}</td>
+        <td class="num">${c.leads}</td>
+        <td class="num">${c.conf || ''}</td>
+        <td class="num">${c.adv || ''}</td>
+        <td class="num">${c.val ? money(c.val) : ''}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  const byStatus = new Map();
+  for (const r of rows) byStatus.set(r.status, (byStatus.get(r.status) || 0) + 1);
+  const homes = agg('client_city').filter((c) => c.k !== 'غير محدد');
+  const recent = [...rows]
+    .sort((a, b) => String(b.added_at || b.created_at || '').localeCompare(String(a.added_at || a.created_at || '')))
+    .slice(0, 8);
+  return `
+    <div class="chips" style="padding:.15rem 0 .45rem">${[...byStatus.entries()].map(([st, n]) =>
+      `<span class="chip" style="cursor:default">${esc(st)}: <b>${n}</b></span>`).join(' ')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:.6rem">
+      ${mini('🏙 مدن المناسبات — أين تحجز هذه الحملة؟', agg('city'))}
+      ${homes.length ? mini('🏠 مدن العملاء (السكن)', homes) : ''}
+      ${mini('🎉 أنواع المناسبات', agg('occasion'))}
+      <div class="tablebox" style="flex:1 1 280px;min-width:0">
+        <b style="display:block;padding:.45rem .7rem .1rem;font-size:.8rem">🕓 أحدث العملاء — اضغط لفتح الحجز</b>
+        <table style="min-width:0">
+          <thead><tr><th>الاسم</th><th>تاريخ المناسبة</th><th>المدينة</th><th>الحالة</th><th>السعر</th></tr></thead>
+          <tbody>${recent.map((r) => `<tr data-open="${r.id}" style="cursor:pointer">
+            <td><b>${esc(fullName(r) || '—')}</b></td>
+            <td class="num">${dmy(r.event_date)}</td>
+            <td>${esc(r.city || '—')}</td>
+            <td>${badge(r.status)}</td>
+            <td class="num">${money(r.price)}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+    </div>
+    ${homes.length ? '' : '<div class="secnote">💡 حقل «مدينة العميل (السكن)» الجديد فارغ بعد — عبِّئه في بطاقة الحجز ليظهر هنا تحليل مدن السكن أيضاً</div>'}`;
+}
+
 async function addCampaign() {
   const inp = $('#campName');
   const v = (inp.value || '').trim();
@@ -1599,18 +1708,19 @@ function renderCapi() {
       <div class="kpi"><b>${CAPI_ALL}</b><span>إجمالي الحجوزات الفعلية (كل المصادر)</span></div>
     </section>
 
-    <div class="finhead"><b>🎯 حملات ميتا — أداء كل حملة</b><span class="muted">حدّد الحملة في «مصدر العميل» على الحجز — وكل الحملات تدخل CAPI تلقائياً</span></div>
+    <div class="finhead"><b>🎯 حملات ميتا — أداء كل حملة</b><span class="muted">اضغط على حملة لتفاصيلها (المدن، المناسبات، أحدث العملاء) · كل الحملات تدخل CAPI تلقائياً</span></div>
     <div class="tablebox"><table style="min-width:0">
       <thead><tr><th>الحملة</th><th>عملاء (كل الحالات)</th><th>مؤكد/مكتمل</th><th>قيمة المؤكد</th><th>عرابين</th><th>تحويل</th><th></th></tr></thead>
-      <tbody>${campaignStats().map((s) => `<tr>
-        <td><b>${esc(s.camp)}</b>${s.camp === LEGACY_META ? ' <span class="muted" style="font-size:.7rem">المصدر الأساسي</span>' : ''}</td>
+      <tbody>${campaignStats().map((s, i) => `<tr data-camprow="${i}" data-camp="${esc(s.camp)}" style="cursor:pointer">
+        <td><b>${esc(s.camp)}</b>${s.camp === LEGACY_META ? ' <span class="muted" style="font-size:.7rem">المصدر الأساسي</span>' : ''} <span class="muted" style="font-size:.68rem">▾</span></td>
         <td class="num">${s.leads}</td>
         <td class="num">${s.conf}</td>
         <td class="num">${money(s.confVal)}</td>
         <td class="num">${s.adv}</td>
         <td class="num">${s.leads ? Math.round(100 * s.conf / s.leads) + '%' : '—'}</td>
         <td>${s.camp === LEGACY_META ? '' : `<button class="btn btn--sm btn--danger campDel" data-camp="${esc(s.camp)}">✕</button>`}</td>
-      </tr>`).join('')}</tbody>
+      </tr>
+      <tr data-campdet="${i}" style="display:none"><td colspan="7" style="background:var(--panel-2);padding:.55rem .8rem"></td></tr>`).join('')}</tbody>
     </table>
     <div class="addrow">
       <input id="campName" placeholder="اسم حملة جديدة… (مثال: ميتا — حملة آب)">
@@ -1653,7 +1763,22 @@ function renderCapi() {
     </table></div>`;
   $('#campAdd').onclick = addCampaign;
   $('#campName').onkeydown = (e) => { if (e.key === 'Enter') addCampaign(); };
-  $$('.campDel', box).forEach((b) => b.onclick = async () => {
+  // A campaign row unfolds its detail panel — built lazily on first open.
+  $$('tr[data-camprow]', box).forEach((tr) => tr.onclick = () => {
+    const det = $(`tr[data-campdet="${tr.dataset.camprow}"]`, box);
+    if (!det) return;
+    if (det.style.display === 'none') {
+      const cell = det.firstElementChild;
+      if (!cell.dataset.built) {
+        cell.innerHTML = campaignDetailHtml(tr.dataset.camp);
+        cell.dataset.built = '1';
+        $$('tr[data-open]', cell).forEach((r) => r.onclick = (ev) => { ev.stopPropagation(); openDrawerById(Number(r.dataset.open)); });
+      }
+      det.style.display = '';
+    } else det.style.display = 'none';
+  });
+  $$('.campDel', box).forEach((b) => b.onclick = async (ev) => {
+    ev.stopPropagation();   // the row's own click opens the detail panel — deleting shouldn't
     const v = b.dataset.camp;
     if (!confirm(`حذف الحملة «${v}» من القائمة؟\nالحجوزات المسجّلة عليها تحتفظ بالمصدر، لكنها لن تُحسب ضمن ميتا CAPI بعد الحذف.`)) return;
     try {
@@ -1724,7 +1849,9 @@ const F = [
   ['booking_no', 'رقم الحجز', 'ro'],
   ['status', 'الحالة', 'select:status'],
   ['first_name', 'الاسم الأول'], ['last_name', 'اسم العائلة'],
-  ['phone', 'الهاتف / واتساب'], ['city', 'المدينة', 'list:cities'],
+  ['phone', 'الهاتف / واتساب'], ['city', 'مدينة المناسبة (مكان الحدث)', 'list:cities'],
+  // سكن العميل حين يختلف عن مدينة المناسبة — حقل جديد (2026-08-24)، يُعبّأ يدوياً
+  ['client_city', 'مدينة العميل (السكن)', 'list:cities'],
   ['occasion', 'نوع المناسبة', 'combo:occasion'], ['venue', 'القاعة / المكان', 'list:venues'],
   ['event_date', 'تاريخ المناسبة', 'date'], ['added_at', 'تاريخ الإضافة (أول تواصل)', 'date'],
   ['booked_at', 'تاريخ الحجز (يُسجَّل تلقائياً عند التأكيد)', 'date'],
@@ -1763,7 +1890,8 @@ function fieldHtml([key, label, kind]) {
       : name === 'venues' ? (state.meta.venues || [])
       : name === 'staff' ? (state.meta.staff || [])
       : (state.meta.options[name] || []);
-    input = `<input id="f_${key}" list="dl_${name}"><datalist id="dl_${name}">${opts.map((o) => `<option value="${esc(o)}">`).join('')}</datalist>`;
+    // datalist id per FIELD, not per list — مدينة المناسبة ومدينة العميل تتشاركان قائمة المدن
+    input = `<input id="f_${key}" list="dl_${key}"><datalist id="dl_${key}">${opts.map((o) => `<option value="${esc(o)}">`).join('')}</datalist>`;
   } else input = `<input id="f_${key}">`;
   return `<div class="field${full}"><label for="f_${key}">${label}</label>${input}</div>`;
 }
@@ -2109,7 +2237,7 @@ $('#scrim').onclick = closeDrawer;
 $('#newBtn').onclick = () => openDrawer(null);
 $('#refreshBtn').onclick = () => Promise.all([loadMeta(), loadRows()]).then(() => toast('تم التحديث ✓'));
 $('#csvBtn').onclick = () => {
-  const cols = ['booking_no','name','first_name','last_name','phone','event_date','occasion','city','region','venue',
+  const cols = ['booking_no','name','first_name','last_name','phone','event_date','occasion','city','client_city','region','venue',
     'status','payment_status','price','deposit','remaining','staff','staff_count',
     'lead_source','interest','callback','notes','source','lang','created_at'];
   const csv = [cols.join(',')]

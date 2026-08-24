@@ -9,7 +9,7 @@ import { displayName } from '../../../shared/names.js'
 // Fields the office may write. Numbers are coerced; anything else is text.
 const WRITABLE = [
   'booked_at', 'added_at', 'event_date', 'occasion', 'first_name', 'last_name', 'name', 'phone',
-  'email', 'city', 'region', 'venue', 'start_time', 'end_time', 'hours', 'guests',
+  'email', 'city', 'client_city', 'region', 'venue', 'start_time', 'end_time', 'hours', 'guests',
   'package', 'price', 'deposit', 'remaining', 'payment_status', 'arrival_time',
   'staff', 'staff_count', 'lead_source', 'interest', 'callback', 'notes', 'status',
 ]

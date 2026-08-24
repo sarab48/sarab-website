@@ -44,7 +44,7 @@ export async function onRequestGet({ request, env }) {
   const upcoming = "event_date >= date('now')"
   const noVal = (col) => `(${col} IS NULL OR TRIM(${col}) = '')`
   const [kpi, booked, deposit, years, months, made, collections, gaps,
-    cities, occasions, sources, weekdays, venues] = await env.DB.batch([
+    cities, occasions, sources, weekdays, venues, citySources, clientCities] = await env.DB.batch([
     env.DB.prepare(`SELECT
       SUM(CASE WHEN status != 'ملغي' THEN 1 ELSE 0 END) AS clients,
       SUM(CASE WHEN ${isConf} THEN 1 ELSE 0 END) AS booked,
@@ -137,6 +137,22 @@ export async function onRequestGet({ request, env }) {
     env.DB.prepare(`SELECT TRIM(venue) AS k, COUNT(*) AS n
       FROM bookings WHERE ${isConf} AND venue IS NOT NULL AND TRIM(venue) != '' ${scope}
       GROUP BY k ORDER BY n DESC, k LIMIT 12`),
+    // المدن × المصدر: where each city's clients come from — the ad-targeting view that
+    // expands under a city row in the المدن table. Same scope as that table.
+    env.DB.prepare(`SELECT ${gk('city')} AS k, ${gk('lead_source')} AS src,
+      COUNT(*) AS clients,
+      SUM(CASE WHEN ${isConf} THEN 1 ELSE 0 END) AS booked,
+      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue
+      FROM bookings WHERE status != 'ملغي' ${scope}
+      GROUP BY k, src ORDER BY k, clients DESC, src`),
+    // مدينة العميل (السكن) — hand-filled since 2026-08-24, so only rows that carry it;
+    // the event's city stays in `city` and keeps driving pricing and the table above.
+    env.DB.prepare(`SELECT TRIM(client_city) AS k,
+      COUNT(*) AS clients,
+      SUM(CASE WHEN ${isConf} THEN 1 ELSE 0 END) AS booked,
+      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue
+      FROM bookings WHERE status != 'ملغي' AND client_city IS NOT NULL AND TRIM(client_city) != '' ${scope}
+      GROUP BY k ORDER BY clients DESC, booked DESC, k`),
   ])
   return Response.json({
     ok: true,
@@ -154,5 +170,7 @@ export async function onRequestGet({ request, env }) {
     sources: sources.results,
     weekdays: weekdays.results,
     venues: venues.results,
+    city_sources: citySources.results,
+    client_cities: clientCities.results,
   })
 }

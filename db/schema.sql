@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   name           TEXT,                 -- display name (form single field, or first+last)
   phone          TEXT,                 -- الجوال / واتساب (digits exactly as recorded)
   email          TEXT,
-  city           TEXT,                 -- المدينة
+  city           TEXT,                 -- مدينة المناسبة (مكان الحدث — تُسعّر عليها)
+  client_city    TEXT,                 -- مدينة العميل — سكنه، حين تختلف عن مدينة المناسبة (2026-08-24)
   region         TEXT,                 -- المنطقة
   venue          TEXT,                 -- القاعة / المكان (the form's "event location" lands here)
   start_time     TEXT,                 -- وقت البداية

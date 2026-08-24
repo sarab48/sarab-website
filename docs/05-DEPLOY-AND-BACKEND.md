@@ -934,3 +934,34 @@ event 29.07 + SARAB-025 event 02.08, 300 ₪ each).
   deltas both ways, derived remaining skips tips, tip never enters P&L, kpi.tips,
   kind=إكرامية filter, UI tip record leaves العربون/المتبقي standing + header shows
   the tip apart). All pass locally.
+
+### 2026-08-24 — مدينة العميل (السكن) + city/source analytics + expandable CAPI campaign rows
+
+Owner asked for (a) city analytics that show **where bookings come from** per city (to
+steer ad spend), (b) a new per-client field for the city the client **lives in** — the
+event's city stays in `city` and keeps driving pricing, but "people from one city book
+a hall in another" was being lost — added empty, the owner fills it by hand, and (c)
+campaign rows in the ميتا CAPI tab that **expand on click** with useful detail.
+
+- Migration `db/migrations/2026-08-24-client-city.sql`: `bookings.client_city TEXT`
+  (additive only). Remote apply on backup `ops/db-backups/2026-08-24-pre-client-city/`
+  — diff-verified 352/352 rows byte-identical, new column all NULL.
+- Drawer: `city` relabeled «مدينة المناسبة (مكان الحدث)», new «مدينة العميل (السكن)»
+  right beside it (both share the cities datalist; datalist ids are now per-field).
+  Both offices' WRITABLE lists + the bookings CSV export carry `client_city`.
+  Website/WhatsApp lead creation never fills it — hand-entry only, by design.
+- `/office/api/insights` grew `city_sources` (city × lead_source: clients, booked,
+  revenue — same scope as the المدن table) and `client_cities` (only rows where the
+  new field is filled). التحليلات: each city row in المدن now unfolds a per-source
+  breakdown ("أين تنجح الإعلانات؟"), new 🏠 «مدن العملاء — أين يسكنون؟» section
+  (self-explaining empty state until the field is filled), both in the insights CSV.
+- ميتا CAPI: clicking a campaign row unfolds (lazily) its detail panel — status chips,
+  event-city table (leads/confirmed/deposits/value per city), client home-city table
+  once filled, occasion table, and the 8 latest clients (each opens the drawer). The
+  ✕ delete button stops propagation so it no longer competes with the row click.
+- Tests: `_vinsights.mjs` (21) + `_vcampaign.mjs` still pass; new `_vccity.mjs`
+  (port 8794, 13 checks): client_city POST/PATCH round-trip, insights city_sources /
+  client_cities math, drawer field + labels, city-row expansion, 🏠 section, CAPI
+  campaign expansion content + toggle + drawer click-through.
+- Deploy `cbc0f0a2` verified: apex/www 200, /office + API 302 to Access, both Pages
+  secrets intact.
