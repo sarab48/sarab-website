@@ -289,6 +289,12 @@
   }
   .editgrid .acts{grid-column:1 / -1; display:flex; gap:.5rem; flex-wrap:wrap}
   tr.fedit>td{background:rgba(201,162,78,.05); white-space:normal}
+  /* payments recorded on the booking, shown inside the expanded event P&L row */
+  .evpays{display:flex; flex-direction:column; gap:.35rem; padding:.7rem .8rem;
+    background:var(--panel-2); border-radius:10px; margin:.3rem 0 0}
+  .evpay{display:flex; justify-content:space-between; gap:.8rem; flex-wrap:wrap;
+    font-size:.85rem; border-bottom:1px dashed rgba(201,162,78,.15); padding-bottom:.3rem}
+  .evpay:last-of-type{border-bottom:0}
   .neg{color:var(--warn)} .pos{color:var(--ok)}
 
   /* analytics bars */
@@ -750,7 +756,9 @@ function egrid(def, obj) {
 const collectGrid = (el) => { const o = {}; $$('input[data-k]', el).forEach((i) => o[i.dataset.k] = i.value); return o; };
 
 // Expandable rows: click a row → inline editor; the add button prepends an empty one.
-function wireEditors(tablebox, def, send) {
+// `extra(obj)` (optional) renders an info block above the editor — e.g. the booking's
+// recorded payments inside an event P&L row.
+function wireEditors(tablebox, def, send, extra) {
   const closeEditors = () => $$('tr.fedit', tablebox).forEach((e) => e.remove());
   $$('tr.frow', tablebox).forEach((tr) => tr.onclick = () => {
     const wasOpen = tr.nextElementSibling && tr.nextElementSibling.classList.contains('fedit');
@@ -759,7 +767,7 @@ function wireEditors(tablebox, def, send) {
     const obj = JSON.parse(tr.dataset.obj);
     const ed = document.createElement('tr');
     ed.className = 'fedit';
-    ed.innerHTML = `<td colspan="${tr.children.length}">${egrid(def, obj)}</td>`;
+    ed.innerHTML = `<td colspan="${tr.children.length}">${extra ? extra(obj) : ''}${egrid(def, obj)}</td>`;
     tr.after(ed);
     $('.esave', ed).onclick = () => send('PATCH', { id: obj.id, ...collectGrid(ed) });
     $('.edel', ed).onclick = () => confirm('حذف هذا السطر نهائياً؟') && send('DELETE', { id: obj.id });
@@ -833,6 +841,27 @@ function renderPayRows() {
 async function loadPayLedger() {
   try { PAYL = await fetchPayLedger(); renderPayRows(); }
   catch (e) { if (e.message !== 'unauthorized') toast('تعذّرت تصفية السجل', true); }
+}
+
+// What the client already paid and how, inside the expanded event P&L row — one line
+// per ledger payment (النوع — المبلغ — الطريقة), same records the booking drawer edits.
+function evPayHtml(e) {
+  const ps = (e.booking_no && FIN.payByBooking && FIN.payByBooking[e.booking_no]) || [];
+  const head = `<b style="font-size:.8rem">💳 الدفعات المسجّلة${e.booking_no ? ' — ' + esc(e.booking_no) : ''}</b>`;
+  if (!ps.length) return `<div class="evpays">${head}
+    <span class="muted" style="font-size:.78rem">${e.booking_no
+      ? 'لا دفعات مسجّلة على هذا الحجز بعد — تُسجَّل من نافذة الحجز (زر «سجّل دفعة»)'
+      : 'السطر غير مربوط برقم حجز (SARAB-…) — اربطه ليعرض دفعاته'}</span></div>`;
+  const tips = sumCol(ps.filter((p) => p.kind === 'إكرامية'), 'amount');
+  const real = sumCol(ps.filter((p) => p.kind !== 'إكرامية'), 'amount');
+  return `<div class="evpays">${head}
+    ${ps.map((p) => `<div class="evpay">
+      <span>${p.kind === 'إكرامية' ? '🎁 ' : ''}<b>${esc(p.kind || 'دفعة')}</b> — <b class="${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</b> — ${esc(p.method || 'طريقة غير محدّدة')}</span>
+      <span class="muted" style="font-size:.74rem">${dmy(p.paid_on)}${p.payer ? ' · 👤 ' + esc(p.payer) : ''}${p.method_ref ? ' · ' + esc(p.method_ref) : ''}${p.note ? ' · ' + esc(p.note) : ''}</span>
+    </div>`).join('')}
+    <span class="muted" style="font-size:.78rem">مجموع الدفعات <b class="pos">${money(real)}</b>${tips
+      ? ` · 🎁 إكرامية ${money(tips)} (خارج حساب الحجز)` : ''} · تُسجَّل الدفعات وتُعدَّل من نافذة الحجز</span>
+  </div>`;
 }
 
 function renderFinance() {
@@ -1071,7 +1100,7 @@ function renderFinance() {
     api('/office/api/finance', { method, body: JSON.stringify({ table, ...body }) })
       .then((r) => { FIN = r; renderFinance(); toast('تم ✓'); })
       .catch((e) => { if (e.message !== 'unauthorized') toast('لم يُحفظ — تحقق من القيم', true); });
-  wireEditors($('#finev', box), EVF, send('event'));
+  wireEditors($('#finev', box), EVF, send('event'), evPayHtml);
   wireEditors($('#fingen', box), GENF, send('general'));
   // Catch-up button: the server seeds the row from the booking itself (same helper the
   // automatic path uses), then the whole tab re-renders with it in place.

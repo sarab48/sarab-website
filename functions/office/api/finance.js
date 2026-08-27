@@ -35,7 +35,7 @@ const val = (k, v, nums) => {
 const COLLECTED = `COALESCE(price - COALESCE(remaining, 0), COALESCE(deposit, 0))`
 
 async function payload(env) {
-  const [ev, gen, kpi, adv, miss, byYear, mPay, mEvExp, mGenExp, mEvents, mExpected] = await env.DB.batch([
+  const [ev, gen, kpi, adv, miss, byYear, mPay, mEvExp, mGenExp, mEvents, mExpected, evPay] = await env.DB.batch([
     // The client column follows the booking (linked by SARAB-NNN): the owner-written
     // first+last wins over whatever the row was seeded with — WhatsApp-profile names
     // stop showing the moment the owner names the client on the booking itself. The
@@ -107,6 +107,13 @@ async function payload(env) {
                     WHERE status IN ('مؤكد','مكتمل')
                       AND event_date IS NOT NULL AND length(event_date) >= 7
                     GROUP BY k`),
+    // Every ledger payment keyed by its booking's SARAB number — the events P&L rows
+    // link by booking_no, so each expanded row can list what the client actually paid
+    // and how (kind — amount — method), straight from the same ledger the drawer edits.
+    env.DB.prepare(`SELECT b.booking_no, p.kind, p.amount, p.method, p.paid_on, p.payer, p.method_ref, p.note
+                    FROM payments p JOIN bookings b ON b.id = p.booking_id
+                    WHERE b.booking_no IS NOT NULL
+                    ORDER BY b.booking_no, (p.paid_on IS NULL), p.paid_on, p.id`),
   ])
   // Merge the month slices; net follows the owner's rule (2026-08-12): money actually
   // received that month minus the EVENT expenses only — general expenses stay out of
@@ -128,6 +135,12 @@ async function payload(env) {
   const byMonth = [...months.values()]
     .map((m) => ({ ...m, net: m.collected - m.ev_expenses }))
     .sort((a, b) => b.k.localeCompare(a.k))
+  const payByBooking = {}
+  for (const p of evPay.results) {
+    const { booking_no, ...rest } = p
+    if (!payByBooking[booking_no]) payByBooking[booking_no] = []
+    payByBooking[booking_no].push(rest)
+  }
   return {
     ok: true,
     events: ev.results.map(({ client_display, ...r }) => ({ ...r, client: client_display ?? r.client })),
@@ -137,6 +150,7 @@ async function payload(env) {
     missing: miss.results,
     byYear: byYear.results,
     byMonth,
+    payByBooking,
   }
 }
 
