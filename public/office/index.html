@@ -721,7 +721,9 @@ const GRID_HEAD = $('#grid thead').innerHTML;
 const EVF = [['booking_no','رقم الحجز'],['event_date','تاريخ المناسبة','date'],['city','المدينة'],['client','العميل'],
   ['price','السعر الكامل','number'],['paid','المدفوع','number'],['worker1','عامل 1','number'],['worker2','عامل 2','number'],
   ['hours_cost','ساعات','number'],['transport','مواصلات','number'],['printing','طباعة صور','number'],['other','أخرى','number'],
-  ['tax_pct','نسبة الضريبة %','number'],['tax_value','قيمة الضريبة','number']];
+  ['tax_pct','نسبة الضريبة %','number'],['tax_value','قيمة الضريبة','number'],
+  // للمعلومات فقط — لا يدخلان في المصاريف ولا في الصافي
+  ['photos_taken','📷 عدد الصور الملتقطة','number'],['bank','BANK','number']];
 const GENF = [['date','التاريخ','date'],['category','الفئة','list:expense_category'],['description','الوصف'],
   ['amount','المبلغ','number'],['method','طريقة الدفع'],['notes','ملاحظات']];
 const INVF = [['item','الصنف'],['unit','الوحدة'],['qty_initial','الكمية الأولية','number'],
@@ -1014,7 +1016,7 @@ function renderFinance() {
     ${sec('fin_ev', '📒 أرباح ومصاريف المناسبات',
       `${FIN.events.length} مناسبة · صافي <b class="${evNet >= 0 ? 'pos' : 'neg'}">${money(evNet)}</b>`,
       `<div class="tablebox" id="finev"><table>
-      <thead><tr><th>الرقم</th><th>العميل</th><th>المدينة</th><th>التاريخ</th><th>السعر</th><th>المدفوع</th><th>المصاريف</th><th>الصافي</th></tr></thead>
+      <thead><tr><th>الرقم</th><th>العميل</th><th>المدينة</th><th>التاريخ</th><th>السعر</th><th>المدفوع</th><th>المصاريف</th><th>الصافي</th><th>📷 الصور</th><th>BANK</th></tr></thead>
       <tbody>${FIN.events.map((e) => `<tr class="frow" data-obj='${esc(JSON.stringify(e))}'>
         <td class="num muted">${esc(e.booking_no || '—')}</td>
         <td><b>${esc(e.client || '—')}</b></td>
@@ -1024,14 +1026,18 @@ function renderFinance() {
         <td class="num">${money(e.paid)}</td>
         <td class="num">${money(e.total_expenses)}</td>
         <td class="num ${(e.net_profit ?? 0) >= 0 ? 'pos' : 'neg'}">${money(e.net_profit)}</td>
-      </tr>`).join('') || '<tr><td colspan="8"><div class="empty">لا سطور بعد</div></td></tr>'}</tbody>
+        <td class="num muted">${e.photos_taken ?? '—'}</td>
+        <td class="num muted">${money(e.bank)}</td>
+      </tr>`).join('') || '<tr><td colspan="10"><div class="empty">لا سطور بعد</div></td></tr>'}</tbody>
       ${FIN.events.length ? `<tfoot><tr><td colspan="4">المجموع (${FIN.events.length})</td>
         <td class="num">${money(sumCol(FIN.events, 'price'))}</td>
         <td class="num">${money(sumCol(FIN.events, 'paid'))}</td>
         <td class="num">${money(sumCol(FIN.events, 'total_expenses'))}</td>
-        <td class="num ${evNet >= 0 ? 'pos' : 'neg'}">${money(evNet)}</td></tr></tfoot>` : ''}
+        <td class="num ${evNet >= 0 ? 'pos' : 'neg'}">${money(evNet)}</td>
+        <td class="num muted">${sumCol(FIN.events, 'photos_taken') || '—'}</td>
+        <td class="num muted">${money(sumCol(FIN.events, 'bank'))}</td></tr></tfoot>` : ''}
     </table>
-    <div class="addrow"><span class="muted" style="font-size:.8rem">اضغط على سطر للتعديل، والمصاريف والصافي (المدفوع − المصاريف) يُحسبان تلقائياً</span><button class="btn btn--sm fadd">+ إضافة مناسبة</button></div></div>`)}
+    <div class="addrow"><span class="muted" style="font-size:.8rem">اضغط على سطر للتعديل، والمصاريف والصافي (المدفوع − المصاريف) يُحسبان تلقائياً · 📷 الصور وBANK للمعلومات فقط — لا يدخلان في الحساب</span><button class="btn btn--sm fadd">+ إضافة مناسبة</button></div></div>`)}
 
     ${sec('fin_gen', '🧾 المصاريف العامة',
       `${FIN.general.length} سطراً · المجموع <b class="neg">${money(sumCol(FIN.general, 'amount'))}</b>`,

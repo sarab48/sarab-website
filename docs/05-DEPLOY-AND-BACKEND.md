@@ -965,3 +965,21 @@ campaign rows in the ميتا CAPI tab that **expand on click** with useful deta
   campaign expansion content + toggle + drawer click-through.
 - Deploy `cbc0f0a2` verified: apex/www 200, /office + API 302 to Access, both Pages
   secrets intact.
+
+**2026-08-27 — photos_taken + BANK on the event P&L (owner request).** Two info-only
+fields per event in «أرباح ومصاريف المناسبات»:
+
+- `event_finances.photos_taken` («📷 عدد الصور الملتقطة» — photos the booth TOOK, not
+  printed) and `event_finances.bank` (labeled just «BANK» by the owner's request — ₪
+  he moved to the bank from that event's money). Both are the owner's own records:
+  accepted/stored/edited like any field but **deliberately absent from COSTS**, so
+  they never move `total_expenses` or `net_profit`. The table shows them as two
+  trailing muted columns with tfoot sums; the row editor carries both inputs; the
+  hint under the table says they're outside the math.
+- Additive migration `db/migrations/2026-08-27-photos-bank.sql` applied local +
+  remote on backup `ops/db-backups/2026-08-27-pre-photos-bank/` — diff-verified
+  21/21 rows byte-identical on all 18 original columns, new columns all NULL.
+- New test `_vphotos.mjs` (port 8796, 8 checks): POST stores both while totals count
+  costs only, PATCH edits/clears with net stable, table columns + values + tfoot
+  sums render, editor inputs present, no page errors.
+- Deploy `de79a666` verified: apex 200, /office API 302 to Access.

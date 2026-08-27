@@ -9,10 +9,13 @@
 import { ensureBookingNo, ensureEventFinance } from './bookings.js'
 import { nameSql } from '../../../shared/names.js'
 
+// photos_taken + bank are the owner's info-only fields — accepted and stored, but
+// deliberately absent from COSTS so they never move total_expenses or net_profit.
 const EV_FIELDS = ['booking_no', 'event_date', 'city', 'client', 'price', 'paid', 'worker1',
-  'worker2', 'hours_cost', 'transport', 'printing', 'other', 'tax_pct', 'tax_value']
+  'worker2', 'hours_cost', 'transport', 'printing', 'other', 'tax_pct', 'tax_value',
+  'photos_taken', 'bank']
 const EV_NUM = new Set(['price', 'paid', 'worker1', 'worker2', 'hours_cost', 'transport',
-  'printing', 'other', 'tax_pct', 'tax_value'])
+  'printing', 'other', 'tax_pct', 'tax_value', 'photos_taken', 'bank'])
 const GEN_FIELDS = ['date', 'category', 'description', 'amount', 'method', 'notes']
 const GEN_NUM = new Set(['amount'])
 const COSTS = ['worker1', 'worker2', 'hours_cost', 'transport', 'printing', 'other', 'tax_value']

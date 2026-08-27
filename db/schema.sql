@@ -74,7 +74,10 @@ CREATE TABLE IF NOT EXISTS event_finances (
   tax_value      REAL,   -- قيمة الضريبة
   total_expenses REAL,   -- إجمالي المصاريف
   net_profit     REAL,   -- صافي الربح
-  extra          TEXT
+  extra          TEXT,
+  -- info-only fields (2026-08-27) — never counted in total_expenses/net_profit
+  photos_taken   REAL,   -- عدد الصور الملتقطة (غير المطبوعة)
+  bank           REAL    -- BANK — ما حوّله المالك للبنك من هذه المناسبة
 );
 
 -- سجل المدفوعات (2026-08-11): one row per payment received on a booking. The stored
