@@ -68,6 +68,16 @@
   }
   .chip.on{color:#231A0E; background:var(--gold); border-color:var(--gold); font-weight:700}
   .chip.ex{color:#FFD9D2; background:rgba(201,60,40,.4); border-color:transparent; text-decoration:line-through; font-weight:700}
+  /* known halls of the chosen city, offered as one-tap chips under القاعة */
+  .vhint{display:flex; flex-wrap:wrap; gap:.3rem; align-items:center; margin-top:.4rem; font-size:.78rem}
+  .vhint:empty{display:none}
+  .vchip{
+    background:rgba(194,161,121,.12); color:var(--gold); border:1px solid rgba(194,161,121,.45);
+    border-radius:999px; padding:.15rem .6rem; font-size:.78rem; cursor:pointer;
+  }
+  .vchip:hover{background:rgba(194,161,121,.25)}
+  /* region group header rows in أسعار المدن */
+  tr.rgroup td{background:rgba(194,161,121,.08); color:var(--gold); font-weight:700; font-size:.85rem}
   .filters select{width:auto}
   label.toggle{display:flex; gap:.35rem; align-items:center; color:var(--muted); font-size:.85rem; white-space:nowrap}
   label.toggle input{width:auto}
@@ -479,6 +489,11 @@ const waLink = (phone) => {
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+// Same normalization the server's cityMatch uses (shared/intel.js) — keep in sync.
+const normCity = (s) => String(s || '').trim().replace(/^ال/, '').replace(/\s+/g, ' ');
+// Canonical regions for the pricing cities and the drawer's المنطقة field.
+const REGIONS = ['الشمال', 'المثلث', 'المركز', 'القدس', 'الجنوب'];
+
 // الطاقم: one worker per separator (، , ; / +) — how many names were written.
 const staffCount = (s) => String(s ?? '').split(/[,،;/+]/).filter((p) => p.trim()).length;
 // Grid cell: the worker(s), with ×n whenever the recorded count says more than one.
@@ -639,6 +654,8 @@ function renderRows() {
 // ---------- pricing manager (tiers by distance; cities inherit the tier price) ----------
 
 let TIERS = [];
+let cityRegionFilter = 'all';   // 'all' | one of REGIONS | 'none' (unassigned)
+let cityQ = '';                 // live name search in the cities table
 
 async function loadPricing() {
   const { tiers } = await api('/office/api/pricing');
@@ -649,6 +666,38 @@ async function loadPricing() {
 function tierSelect(cls, selected) {
   return `<select class="${cls}">${TIERS.map((t) =>
     `<option value="${t.id}" ${t.id === selected ? 'selected' : ''}>${esc(t.name)} — ${money(t.price)}</option>`).join('')}</select>`;
+}
+
+function regionSelect(cls, selected) {
+  return `<select class="${cls}"><option value="">— بلا منطقة —</option>${REGIONS.map((r) =>
+    `<option value="${r}"${r === selected ? ' selected' : ''}>${r}</option>`).join('')}</select>`;
+}
+
+// The cities table body honours the region chips + the search box. «الكل» groups the
+// list under a header row per region; a specific region (or بدون منطقة) lists plainly.
+function cityRowsHtml() {
+  const cities = TIERS.flatMap((t) => t.cities.map((c) => ({ ...c, price: t.price, tid: t.id })));
+  const q = normCity(cityQ);
+  const shown = cities
+    .filter((c) => (cityRegionFilter === 'all'
+      || (cityRegionFilter === 'none' ? !c.region : c.region === cityRegionFilter))
+      && (!q || normCity(c.name).includes(q)))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  const row = (c) => `<tr data-city="${c.id}">
+    <td>${esc(c.name)}</td>
+    <td>${regionSelect('cityRegion', c.region)}</td>
+    <td>${tierSelect('moveCity', c.tid)}</td>
+    <td class="num">${money(c.price)}</td>
+    <td><button class="btn btn--sm btn--danger delCity" data-name="${esc(c.name)}">✕</button></td>
+  </tr>`;
+  if (!shown.length) return '<tr><td colspan="5" class="muted">لا مدن مطابقة</td></tr>';
+  if (cityRegionFilter !== 'all') return shown.map(row).join('');
+  return [...REGIONS, null].map((g) => {
+    const rows = shown.filter((c) => (g ? c.region === g : !c.region));
+    return rows.length
+      ? `<tr class="rgroup"><td colspan="5">🧭 ${g || 'بدون منطقة'} — ${rows.length} مدينة</td></tr>` + rows.map(row).join('')
+      : '';
+  }).join('');
 }
 
 function renderPricing() {
@@ -673,18 +722,23 @@ function renderPricing() {
       <button class="btn btn--sm" id="addTier">+ إضافة فئة</button>
     </div></div>
 
-    <div class="tablebox"><table>
-      <thead><tr><th>المدينة</th><th>الفئة — غيّرها لنقل المدينة</th><th>السعر</th><th></th></tr></thead>
-      <tbody>${TIERS.flatMap((t) => t.cities.map((c) => `<tr data-city="${c.id}">
-        <td>${esc(c.name)}</td>
-        <td>${tierSelect('moveCity', t.id)}</td>
-        <td class="num">${money(t.price)}</td>
-        <td><button class="btn btn--sm btn--danger delCity" data-name="${esc(c.name)}">✕</button></td>
-      </tr>`)).join('')}
-      </tbody>
+    <div class="tablebox">
+    <div class="filters" style="padding:.75rem .8rem .25rem">
+      <div class="chips">${['all', ...REGIONS, 'none'].map((g) => {
+        const n = g === 'all' ? nCities
+          : TIERS.reduce((s, t) => s + t.cities.filter((c) => (g === 'none' ? !c.region : c.region === g)).length, 0);
+        if (g === 'none' && !n) return '';
+        return `<button class="chip${cityRegionFilter === g ? ' on' : ''}" data-rg="${g}">${g === 'all' ? 'الكل' : g === 'none' ? 'بدون منطقة' : g} (${n})</button>`;
+      }).join('')}</div>
+      <input class="search" id="cq" type="search" placeholder="بحث عن مدينة…" value="${esc(cityQ)}">
+    </div>
+    <table>
+      <thead><tr><th>المدينة</th><th>المنطقة</th><th>الفئة — غيّرها لنقل المدينة</th><th>السعر</th><th></th></tr></thead>
+      <tbody id="cityRows">${cityRowsHtml()}</tbody>
     </table>
     <div class="addrow">
       <input class="name" id="ncName" placeholder="مدينة جديدة…">
+      ${regionSelect('ncRegion', REGIONS.includes(cityRegionFilter) ? cityRegionFilter : '')}
       ${TIERS.length ? tierSelect('ncTier', TIERS[0].id) : ''}
       <button class="btn btn--sm" id="addCity">+ إضافة مدينة</button>
     </div></div>`;
@@ -707,16 +761,23 @@ function renderPricing() {
   });
   $('#addTier').onclick = () =>
     send('POST', { type: 'tier', name: $('#ntName').value, price: $('#ntPrice').value }, 'أُضيفت الفئة ✓', 'تحقق من الاسم والسعر');
-  $$('tr[data-city]', box).forEach((tr) => {
+  const wireCityRows = () => $$('tr[data-city]', box).forEach((tr) => {
     const id = Number(tr.dataset.city);
     $('.moveCity', tr).onchange = (e) =>
       send('PATCH', { type: 'city', id, tier_id: Number(e.target.value) }, 'نُقلت المدينة ✓', 'لم تُنقل');
+    $('.cityRegion', tr).onchange = (e) =>
+      send('PATCH', { type: 'city', id, region: e.target.value }, 'حُدِّثت المنطقة ✓', 'لم تُحدَّث');
     $('.delCity', tr).onclick = (e) => confirm(`حذف "${e.target.dataset.name}" من القائمة؟`) &&
       send('DELETE', { type: 'city', id }, 'حُذفت ✓', 'لم تُحذف');
   });
+  wireCityRows();
+  $$('.chip[data-rg]', box).forEach((b) => b.onclick = () => { cityRegionFilter = b.dataset.rg; renderPricing(); });
+  // Typing re-renders only the body so the search box keeps its focus.
+  $('#cq').oninput = (e) => { cityQ = e.target.value; $('#cityRows').innerHTML = cityRowsHtml(); wireCityRows(); };
   $('#addCity').onclick = () => {
     const sel = $('.ncTier', box);
-    send('POST', { type: 'city', name: $('#ncName').value, tier_id: sel ? Number(sel.value) : 0 }, 'أُضيفت المدينة ✓', 'المدينة موجودة أو الاسم فارغ');
+    send('POST', { type: 'city', name: $('#ncName').value, region: $('.ncRegion', box).value,
+      tier_id: sel ? Number(sel.value) : 0 }, 'أُضيفت المدينة ✓', 'المدينة موجودة أو الاسم فارغ');
   };
 }
 
@@ -1895,7 +1956,7 @@ const F = [
   ['price', 'السعر الكامل', 'number'], ['deposit', 'العربون المدفوع', 'number'],
   ['remaining', 'المتبقي', 'number'], ['payment_status', 'حالة الدفع', 'select:payment_status'],
   ['lead_source', 'مصدر العميل', 'select:lead_source'], ['interest', 'مستوى الاهتمام', 'select:interest'],
-  ['region', 'المنطقة'],
+  ['region', 'المنطقة', 'list:regions'],
   // the two طاقم fields sit on one row together — the names and how many people they are
   ['staff', 'الطاقم — العامل في المناسبة', 'list:staff'], ['staff_count', 'عدد العمال', 'number'],
   ['arrival_time', 'وقت وصولي'], ['package', 'الباقة / النمط'],
@@ -1924,11 +1985,54 @@ function fieldHtml([key, label, kind]) {
     const opts = name === 'cities' ? (state.meta.cities || []).map((c) => c.name)
       : name === 'venues' ? (state.meta.venues || [])
       : name === 'staff' ? (state.meta.staff || [])
+      : name === 'regions' ? REGIONS
       : (state.meta.options[name] || []);
     // datalist id per FIELD, not per list — مدينة المناسبة ومدينة العميل تتشاركان قائمة المدن
     input = `<input id="f_${key}" list="dl_${key}"><datalist id="dl_${key}">${opts.map((o) => `<option value="${esc(o)}">`).join('')}</datalist>`;
   } else input = `<input id="f_${key}">`;
-  return `<div class="field${full}"><label for="f_${key}">${label}</label>${input}</div>`;
+  // القاعة grows a hint row under it: the chosen city's known halls as one-tap chips.
+  const extra = key === 'venue' ? '<div class="vhint" id="venueHint"></div>' : '';
+  return `<div class="field${full}"><label for="f_${key}">${label}</label>${input}${extra}</div>`;
+}
+
+// Halls already used in the typed city (normalized like the server's cityMatch),
+// most-used first — they lead the القاعة datalist and become the one-tap chips.
+function venueCityLists(cityTxt) {
+  const t = normCity(cityTxt);
+  const inCity = new Map();
+  if (t) for (const p of (state.meta.venue_cities || [])) {
+    if (normCity(p.c) === t) inCity.set(p.v, (inCity.get(p.v) || 0) + p.n);
+  }
+  const local = [...inCity.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ar'))
+    .map(([v]) => v);
+  return { local, rest: (state.meta.venues || []).filter((v) => !inCity.has(v)) };
+}
+
+function refreshVenueList() {
+  const dl = $('#dl_venue');
+  if (!dl) return;
+  const city = $('#f_city').value;
+  const { local, rest } = venueCityLists(city);
+  dl.innerHTML = [...local, ...rest].map((v) => `<option value="${esc(v)}">`).join('');
+  const hint = $('#venueHint');
+  if (!hint) return;
+  hint.innerHTML = local.length
+    ? `<span class="muted">قاعات ${esc(city.trim())} المعروفة:</span>`
+      + local.slice(0, 10).map((v) => `<button type="button" class="vchip">${esc(v)}</button>`).join('')
+    : '';
+  $$('.vchip', hint).forEach((b) => b.onclick = () => { $('#f_venue').value = b.textContent; loadIntel(); });
+}
+
+// المنطقة follows the chosen city's region from قائمة الأسعار — but only while the
+// owner hasn't typed one: an empty field, or the value we auto-filled, gets updated;
+// anything hand-written (or stored on the booking) is never touched.
+function autofillRegion() {
+  const rf = $('#f_region');
+  if (!rf || (rf.value.trim() && rf.value !== state.regionAuto)) return;
+  const t = normCity($('#f_city').value);
+  const hit = t && (state.meta.cities || []).find((c) => normCity(c.name) === t);
+  if (hit && hit.region) { rf.value = hit.region; state.regionAuto = hit.region; }
 }
 
 // Draft replies in the lead's language (⚠ draft copy — flagged for the owner's sign-off).
@@ -2211,6 +2315,12 @@ function openDrawer(id, presetDate) {
   $('#f_city').addEventListener('input', intelDeb);
   $('#f_venue').addEventListener('input', intelDeb);
   loadIntel();
+  // halls-by-city + region auto-fill follow the city field instantly (no server call)
+  state.regionAuto = null;
+  $('#f_region').addEventListener('input', () => state.regionAuto = null);
+  $('#f_city').addEventListener('input', () => { refreshVenueList(); autofillRegion(); });
+  refreshVenueList();
+  autofillRegion();
   const wa = row && waLink(row.phone);
   $('#waBtn').style.display = wa ? '' : 'none';
   if (wa) $('#waBtn').href = wa;

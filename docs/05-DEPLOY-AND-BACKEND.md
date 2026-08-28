@@ -983,3 +983,36 @@ fields per event in «أرباح ومصاريف المناسبات»:
   costs only, PATCH edits/clears with net stable, table columns + values + tfoot
   sums render, editor inputs present, no page errors.
 - Deploy `de79a666` verified: apex 200, /office API 302 to Access.
+
+**2026-08-28 — halls organized by city + city regions (owner request: "make adding a
+client easier").** Two efficiency features in the office dashboard:
+
+- **Halls by city (drawer).** `/office/api/meta` now returns `venue_cities`
+  (venue × event-city × count from booking history) alongside the flat `venues`
+  list. In the booking drawer, typing/choosing مدينة المناسبة instantly (client-side)
+  reorders the القاعة datalist — that city's known halls first, most-used first —
+  and shows them as one-tap `.vchip` chips under the field («قاعات X المعروفة»);
+  tapping a chip fills القاعة and re-runs the intel strip. Normalization matches the
+  server's `cityMatch` (`normCity` in the dashboard — keep in sync with
+  `shared/intel.js`).
+- **City regions (أسعار المدن).** Additive `cities.region` column (migration
+  `db/migrations/2026-08-28-city-regions.sql`) with canonical vocabulary
+  الشمال/المثلث/المركز/القدس/الجنوب; the seed classified all 74 existing cities by
+  name (50/13/4/4/3), guarded `WHERE region IS NULL` so it never overwrites later
+  owner edits. Applied local + remote on backup
+  `ops/db-backups/2026-08-28-pre-city-regions/` — diff-verified 74/74 rows, zero
+  name/tier changes. Tab UI: region filter chips with counts (+ «بدون منطقة» only
+  when non-empty), live city search box (`normCity` matching; re-renders tbody only
+  so focus survives), «الكل» groups rows under 🧭 region header rows, each row gets
+  a region `<select>` (PATCH `{type:'city', region}`), add-city row gets a region
+  select preset to the active filter. `/office/api/pricing` validates region against
+  the canonical list (`invalid-region`), empty string clears to NULL. Cities auto-
+  added by `ensureCityPrice` start region-less and surface under «بدون منطقة».
+- **Region auto-fill (drawer).** المنطقة became a `list:regions` datalist; when the
+  owner picks a city whose pricing entry has a region, an empty المنطقة auto-fills
+  (tracked via `state.regionAuto` — a hand-typed value is never overwritten).
+- New test `_vregion.mjs` (port 8799, 17 checks): pricing region POST/PATCH/clear +
+  invalid-region rejection, meta `venue_cities`/region payloads, drawer hall chips +
+  datalist order + chip fill + region auto-fill + manual-region wins, tab chips/
+  grouping/filter/search/row-select. `_vccity.mjs` + `_vcity.mjs` re-run clean.
+- Deploy `774f7127` verified: apex 200, /office API 302 to Access.

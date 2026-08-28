@@ -25,7 +25,7 @@ export function staffNames(rows) {
 export async function onRequestGet({ env, data }) {
   const [options, cities, counts, kpi, months, venues, occasions, staff] = await env.DB.batch([
     env.DB.prepare('SELECT kind, value, pos FROM options ORDER BY kind, pos'),
-    env.DB.prepare(`SELECT c.id, c.name, p.price FROM cities c
+    env.DB.prepare(`SELECT c.id, c.name, c.region, p.price FROM cities c
                     JOIN price_tiers p ON p.id = c.tier_id ORDER BY p.price, c.name`),
     env.DB.prepare('SELECT status, COUNT(*) AS n FROM bookings GROUP BY status'),
     env.DB.prepare(`SELECT
@@ -38,9 +38,12 @@ export async function onRequestGet({ env, data }) {
          WHERE status IN ('مؤكد','دفع العربون','مكتمل') AND remaining > 0) AS outstanding`),
     env.DB.prepare(`SELECT DISTINCT substr(event_date, 1, 7) AS m FROM bookings
                     WHERE event_date IS NOT NULL AND length(event_date) >= 7 ORDER BY m DESC`),
-    // halls/venues already used once — offered for reuse, like the workbook's lists
-    env.DB.prepare(`SELECT DISTINCT venue AS v FROM bookings
-                    WHERE venue IS NOT NULL AND venue != '' ORDER BY v`),
+    // halls/venues already used once — offered for reuse, like the workbook's lists.
+    // Kept per (venue, city) with a count so the drawer can put the chosen city's
+    // halls first; the flat list is derived below for everything else.
+    env.DB.prepare(`SELECT venue AS v, city AS c, COUNT(*) AS n FROM bookings
+                    WHERE venue IS NOT NULL AND venue != ''
+                    GROUP BY venue, city ORDER BY v`),
     // event types actually used in bookings (most-used first) — folded into the occasion
     // vocabulary below so the dropdown shows the full real list and auto-grows with new ones
     env.DB.prepare(`SELECT occasion AS o, COUNT(*) AS n FROM bookings
@@ -81,7 +84,8 @@ export async function onRequestGet({ env, data }) {
     statusCounts: Object.fromEntries(counts.results.map((r) => [r.status, r.n])),
     kpi: kpi.results[0],
     months: months.results.map((r) => r.m),
-    venues: venues.results.map((r) => r.v),
+    venues: [...new Set(venues.results.map((r) => r.v))],
+    venue_cities: venues.results,
     staff: staffNames(staff.results),
     // Whether the optional Google Calendar link is switched on (docs/06-GOOGLE-CALENDAR.md).
     // Off = the dashboard hides its button entirely; the التقويم tab is unaffected either way.

@@ -7,10 +7,21 @@
 
 const bad = (error, status = 400) => Response.json({ ok: false, error }, { status })
 
+// Canonical regions (2026-08-28). A city may also have no region yet (NULL).
+const REGIONS = ['الشمال', 'المثلث', 'المركز', 'القدس', 'الجنوب']
+
+// undefined = field absent; null = valid "no region"; string must be canonical.
+function parseRegion(b) {
+  if (b.region === undefined) return undefined
+  const r = String(b.region ?? '').trim()
+  if (!r) return null
+  return REGIONS.includes(r) ? r : false
+}
+
 async function tree(env) {
   const [tiers, cities] = await env.DB.batch([
     env.DB.prepare('SELECT id, name, price, pos FROM price_tiers ORDER BY price, id'),
-    env.DB.prepare('SELECT id, name, tier_id FROM cities ORDER BY name'),
+    env.DB.prepare('SELECT id, name, tier_id, region FROM cities ORDER BY name'),
   ])
   const byTier = {}
   for (const c of cities.results) (byTier[c.tier_id] ??= []).push(c)
@@ -33,10 +44,13 @@ export async function onRequestPost({ request, env }) {
     const name = String(b.name || '').trim().slice(0, 100)
     const tierId = Number(b.tier_id)
     if (!name || !tierId) return bad('invalid-city')
+    const region = parseRegion(b)
+    if (region === false) return bad('invalid-region')
     const tier = await env.DB.prepare('SELECT id FROM price_tiers WHERE id = ?1').bind(tierId).first()
     if (!tier) return bad('no-such-tier')
     try {
-      await env.DB.prepare('INSERT INTO cities (name, tier_id) VALUES (?1, ?2)').bind(name, tierId).run()
+      await env.DB.prepare('INSERT INTO cities (name, tier_id, region) VALUES (?1, ?2, ?3)')
+        .bind(name, tierId, region ?? null).run()
     } catch {
       return bad('city-exists')
     }
@@ -70,6 +84,11 @@ export async function onRequestPatch({ request, env }) {
       const tier = await env.DB.prepare('SELECT id FROM price_tiers WHERE id = ?1').bind(Number(b.tier_id)).first()
       if (!tier) return bad('no-such-tier')
       await env.DB.prepare('UPDATE cities SET tier_id = ?1 WHERE id = ?2').bind(Number(b.tier_id), id).run()
+    }
+    if (b.region !== undefined) {
+      const region = parseRegion(b)
+      if (region === false) return bad('invalid-region')
+      await env.DB.prepare('UPDATE cities SET region = ?1 WHERE id = ?2').bind(region, id).run()
     }
     if (b.name !== undefined) {
       const name = String(b.name).trim().slice(0, 100)
