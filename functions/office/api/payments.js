@@ -27,10 +27,19 @@
   reverses precisely. The owner's manual edits of those fields elsewhere stay allowed
   and untouched — the drawer shows both so any gap is visible instead of hidden.
 
+  استرداد (refund, 2026-09-03): money handed BACK to the client — typically the advance
+  of a booking that cancelled. Stored with a NEGATIVE amount whatever sign was sent, so
+  every SUM(amount) in the finance views nets it out on its own (cash by month drops in
+  the month it was paid back, the method bars, the ledger totals). Toward the booking it
+  is the exact reverse of an advance: deposit and remaining move back by it, and so does
+  the event's P&L paid. Recording one on a cancelled booking that has no decision yet
+  marks its cancel_decision = 'refund' (bookings.js) — a refund IS the decision.
+
   A payment that carries an issued receipt (doc_number, future Invoice4U automation)
   can no longer be deleted or change amount/kind — a real tax document has to be
   undone with a credit note, not a row delete. Auth: ../_middleware.js.
 */
+import { CANCELLED } from './bookings.js'
 
 const bad = (error, status = 400) => Response.json({ ok: false, error }, { status })
 
@@ -44,7 +53,13 @@ const today = () => new Date().toISOString().slice(0, 10)
 // A tip's effective amount toward the booking's totals is zero — it is extra cash on
 // the side, not payment of the price.
 const TIP = 'إكرامية'
+const REFUND = 'استرداد'
+const ADVANCE = 'عربون'
 const eff = (kind, amount) => (kind === TIP ? 0 : amount)
+// A refund is always negative money; the office types it as a plain number.
+const signed = (kind, amount) => (kind === REFUND ? -Math.abs(amount) : amount)
+// What moves العربون: an advance adds to it, a refund (negative) takes back from it.
+const depositPart = (kind, amount) => (kind === ADVANCE || kind === REFUND ? amount : 0)
 
 // Exact-delta sync of the running totals a payment mutation affects. remaining falls
 // by the amount when it is tracked; a booking that never tracked remaining but has a
@@ -119,7 +134,8 @@ async function globalPayload(env, f = {}) {
       (SELECT COUNT(*) FROM payments) AS n,
       (SELECT COALESCE(SUM(amount), 0) FROM payments
          WHERE substr(paid_on, 1, 7) = strftime('%Y-%m', 'now')) AS month_now,
-      (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE kind = 'إكرامية') AS tips`),
+      (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE kind = 'إكرامية') AS tips,
+      (SELECT COALESCE(-SUM(amount), 0) FROM payments WHERE amount < 0) AS refunds`),
     // Events that already happened and still owe money — nowhere else surfaces these
     // (the advances table and the التحليلات call list only look forward).
     env.DB.prepare(`SELECT id, booking_no, name, first_name, last_name, phone, city,
@@ -158,13 +174,14 @@ export async function onRequestPost({ request, env }) {
   let b
   try { b = await request.json() } catch { return bad('bad-json') }
   const bookingId = Number(b.booking_id)
-  const amount = Number(b.amount)
+  const amountIn = Number(b.amount)
   if (!bookingId) return bad('missing-booking')
   // Negative = a refund the owner records deliberately; zero records nothing.
-  if (!Number.isFinite(amount) || amount === 0) return bad('bad-amount')
-  const bk = await env.DB.prepare('SELECT id FROM bookings WHERE id = ?1').bind(bookingId).first()
+  if (!Number.isFinite(amountIn) || amountIn === 0) return bad('bad-amount')
+  const bk = await env.DB.prepare('SELECT id, status, cancel_decision FROM bookings WHERE id = ?1').bind(bookingId).first()
   if (!bk) return bad('booking-not-found', 404)
   const kind = txt(b.kind, 40) || 'دفعة'
+  const amount = signed(kind, amountIn)
   const method = txt(b.method, 60)
   const paid_on = DATE_RE.test(String(b.paid_on || '')) ? b.paid_on : today()
   const note = txt(b.note, 300)
@@ -175,7 +192,13 @@ export async function onRequestPost({ request, env }) {
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
   ).bind(bookingId, amount, kind, method, paid_on, note, payer, method_ref).run()
   const dAmount = eff(kind, amount)
-  if (dAmount) await applyDelta(env, bookingId, dAmount, kind === 'عربون' ? amount : 0)
+  if (dAmount) await applyDelta(env, bookingId, dAmount, depositPart(kind, amount))
+  // Paying the advance back to a cancelled client settles the open question — unless
+  // the owner had already decided to keep it (then this is a partial goodwill refund
+  // and the decision stands).
+  if (kind === REFUND && bk.status === CANCELLED && !bk.cancel_decision) {
+    await env.DB.prepare("UPDATE bookings SET cancel_decision = 'refund' WHERE id = ?1").bind(bookingId).run()
+  }
   return Response.json(await bookingPayload(env, bookingId))
 }
 
@@ -188,9 +211,12 @@ export async function onRequestPatch({ request, env }) {
   if (!old) return bad('not-found', 404)
   if (old.doc_number && ('amount' in b || 'kind' in b)) return bad('has-document')
 
-  const amount = 'amount' in b ? Number(b.amount) : old.amount
-  if (!Number.isFinite(amount) || amount === 0) return bad('bad-amount')
+  const amountIn = 'amount' in b ? Number(b.amount) : old.amount
+  if (!Number.isFinite(amountIn) || amountIn === 0) return bad('bad-amount')
   const kind = 'kind' in b ? (txt(b.kind, 40) || 'دفعة') : old.kind
+  // Kind flips keep the sign rule: into استرداد turns negative, out of it turns positive.
+  const amount = kind === REFUND ? signed(kind, amountIn)
+    : old.kind === REFUND && !('amount' in b) ? Math.abs(amountIn) : amountIn
   const method = 'method' in b ? txt(b.method, 60) : old.method
   const paid_on = 'paid_on' in b
     ? (DATE_RE.test(String(b.paid_on || '')) ? b.paid_on : null)
@@ -207,7 +233,7 @@ export async function onRequestPatch({ request, env }) {
   ).bind(amount, kind, method, paid_on, note, payer, method_ref, id).run()
 
   const dAmount = eff(kind, amount) - eff(old.kind, old.amount)
-  const dDeposit = (kind === 'عربون' ? amount : 0) - (old.kind === 'عربون' ? old.amount : 0)
+  const dDeposit = depositPart(kind, amount) - depositPart(old.kind, old.amount)
   if (dAmount || dDeposit) await applyDelta(env, old.booking_id, dAmount, dDeposit)
   return Response.json(await bookingPayload(env, old.booking_id))
 }
@@ -222,6 +248,6 @@ export async function onRequestDelete({ request, env }) {
   if (old.doc_number) return bad('has-document')
   await env.DB.prepare('DELETE FROM payments WHERE id = ?1').bind(id).run()
   const dAmount = eff(old.kind, old.amount)
-  if (dAmount) await applyDelta(env, old.booking_id, -dAmount, old.kind === 'عربون' ? -old.amount : 0)
+  if (dAmount) await applyDelta(env, old.booking_id, -dAmount, -depositPart(old.kind, old.amount))
   return Response.json(await bookingPayload(env, old.booking_id))
 }

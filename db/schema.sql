@@ -42,7 +42,12 @@ CREATE TABLE IF NOT EXISTS bookings (
   extra          TEXT,                 -- JSON: computed helpers + anything unmapped
   gcal_event_id  TEXT,                 -- Google Calendar event this booking owns (2026-07-29)
   gcal_link      TEXT,                 -- that event's htmlLink, for the dashboard
-  gcal_synced_at TEXT                  -- last successful push to the calendar
+  gcal_synced_at TEXT,                 -- last successful push to the calendar
+  -- cancellation record (2026-09-03): the status stays ملغي; these say when, what happens
+  -- to the advance, and why. A refund is a payments row (kind استرداد, negative amount).
+  cancelled_at    TEXT,                -- تاريخ الإلغاء (auto-stamped when status turns ملغي)
+  cancel_decision TEXT,                -- kept | refund | NULL = not decided yet
+  cancel_reason   TEXT                 -- سبب الإلغاء
 );
 CREATE INDEX IF NOT EXISTS idx_bookings_event_date ON bookings(event_date);
 CREATE INDEX IF NOT EXISTS idx_bookings_status     ON bookings(status);
@@ -89,7 +94,7 @@ CREATE TABLE IF NOT EXISTS payments (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   booking_id     INTEGER NOT NULL,     -- bookings.id
   amount         REAL NOT NULL,        -- ₪ received
-  kind           TEXT,                 -- عربون | دفعة | إكرامية (tip: cash in hand only — never moves deposit/remaining/P&L, excluded from receipts)
+  kind           TEXT,                 -- عربون | دفعة | إكرامية (tip: cash in hand only — never moves deposit/remaining/P&L, excluded from receipts) | استرداد (refund, 2026-09-03: amount stored NEGATIVE — reverses an advance: deposit/remaining/P&L move back by it, every cash sum nets it out)
   method         TEXT,                 -- طريقة الدفع (options kind=payment_method)
   paid_on        TEXT,                 -- date received (YYYY-MM-DD)
   note           TEXT,

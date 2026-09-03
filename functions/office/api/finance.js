@@ -7,6 +7,7 @@
   Auth: ../_middleware.js.
 */
 import { ensureBookingNo, ensureEventFinance } from './bookings.js'
+import { cancellationRows, cancellationSummary } from './cancellations.js'
 import { nameSql } from '../../../shared/names.js'
 
 // photos_taken + bank are the owner's info-only fields — accepted and stored, but
@@ -141,6 +142,10 @@ async function payload(env) {
     if (!payByBooking[booking_no]) payByBooking[booking_no] = []
     payByBooking[booking_no].push(rest)
   }
+  // الإلغاءات (2026-09-03): advances kept from cancelled bookings are income the other
+  // aggregates never see (no P&L row, not a live booking) — the tab adds them to
+  // «محصّل فعلياً»; refunds already net out of every ledger sum on their own.
+  const cancellations = cancellationSummary(await cancellationRows(env))
   return {
     ok: true,
     events: ev.results.map(({ client_display, ...r }) => ({ ...r, client: client_display ?? r.client })),
@@ -151,6 +156,7 @@ async function payload(env) {
     byYear: byYear.results,
     byMonth,
     payByBooking,
+    cancellations,
   }
 }
 

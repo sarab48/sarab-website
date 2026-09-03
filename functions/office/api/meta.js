@@ -35,7 +35,14 @@ export async function onRequestGet({ env, data }) {
       (SELECT COUNT(*) FROM bookings WHERE status = 'دفع العربون' AND event_date >= date('now')) AS deposit_upcoming,
       (SELECT COUNT(*) FROM bookings WHERE status = 'عرض سعر') AS quotes,
       (SELECT COALESCE(SUM(remaining), 0) FROM bookings
-         WHERE status IN ('مؤكد','دفع العربون','مكتمل') AND remaining > 0) AS outstanding`),
+         WHERE status IN ('مؤكد','دفع العربون','مكتمل') AND remaining > 0) AS outstanding,
+      -- Cancelled after paying something, fate of the money not decided yet (2026-09-03):
+      -- surfaced in the header so the owner reaches the الإلغاءات tab without hunting.
+      (SELECT COUNT(*) FROM bookings b
+         WHERE b.status = 'ملغي' AND b.cancel_decision IS NULL
+           AND (COALESCE(b.deposit, 0) > 0
+                OR EXISTS (SELECT 1 FROM payments p WHERE p.booking_id = b.id
+                           AND p.amount > 0 AND COALESCE(p.kind, '') != 'إكرامية'))) AS cancel_pending`),
     env.DB.prepare(`SELECT DISTINCT substr(event_date, 1, 7) AS m FROM bookings
                     WHERE event_date IS NOT NULL AND length(event_date) >= 7 ORDER BY m DESC`),
     // halls/venues already used once — offered for reuse, like the workbook's lists.

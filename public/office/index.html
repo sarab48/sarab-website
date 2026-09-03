@@ -307,6 +307,20 @@
   .evpay:last-of-type{border-bottom:0}
   .neg{color:var(--warn)} .pos{color:var(--ok)}
 
+  /* الإلغاءات — a booking cancelled after paying: drawer strip, grid marker, tab detail */
+  .field.cancel-only{background:rgba(201,123,106,.08); border-radius:8px; padding:.35rem .45rem}
+  .cmark{font-size:.72rem; margin-inline-start:.25rem; white-space:nowrap}
+  .cdet{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:1rem; padding:.7rem .4rem; white-space:normal}
+  .cdet .col{display:grid; gap:.5rem; align-content:start}
+  .cdet b.h{display:block; color:var(--gold); font-size:.85rem}
+  .cdet label{display:grid; gap:.2rem; font-size:.78rem; color:var(--muted)}
+  .cdet p{margin:0; font-size:.8rem; color:var(--muted)}
+  .cform{display:grid; grid-template-columns:1fr 1fr; gap:.45rem; padding:.55rem; border:1px solid var(--line); border-radius:10px}
+  .cform .btn, .cform .c_note{grid-column:1 / -1}
+  .cpay{display:flex; justify-content:space-between; gap:.6rem; flex-wrap:wrap; font-size:.82rem; border-bottom:1px dashed rgba(201,162,78,.15); padding-bottom:.25rem}
+  .cpay:last-of-type{border-bottom:0}
+  #kpis .kpi[data-goto]{cursor:pointer}
+
   /* analytics bars */
   .bar{display:grid; grid-template-columns:minmax(90px,auto) 1fr auto; gap:.6rem; align-items:center; padding:.25rem 0; font-size:.85rem}
   .bar i{display:block; height:8px; background:var(--gold); border-radius:4px; min-width:2px}
@@ -369,6 +383,7 @@
   <button data-tab="bookings" class="on">الحجوزات</button>
   <button data-tab="calendar">التقويم</button>
   <button data-tab="callback">إعادة الاتصال</button>
+  <button data-tab="cancellations">الإلغاءات</button>
   <button data-tab="whatsapp">واتساب</button>
   <button data-tab="finance">المالية</button>
   <button data-tab="insights">التحليلات</button>
@@ -416,6 +431,7 @@
   <div class="pricing" id="visitors" style="display:none"></div>
   <div class="pricing" id="capi" style="display:none"></div>
   <div class="pricing" id="whatsapp" style="display:none"></div>
+  <div class="pricing" id="cancellations" style="display:none"></div>
 </main>
 
 <div class="scrim" id="scrim"></div>
@@ -549,7 +565,9 @@ function renderKpis() {
     <div class="kpi"><b>${k.deposit_upcoming || 0}</b><span>عربون مدفوع — بانتظار التأكيد</span></div>
     <div class="kpi"><b>${k.inquiries}</b><span>استفسارات مفتوحة</span></div>
     <div class="kpi"><b>${k.quotes}</b><span>عروض سعر</span></div>
-    <div class="kpi gold"><b>${money(k.outstanding)}</b><span>مبالغ متبقية للتحصيل</span></div>`;
+    <div class="kpi gold"><b>${money(k.outstanding)}</b><span>مبالغ متبقية للتحصيل</span></div>
+    ${k.cancel_pending ? `<div class="kpi" data-goto="cancellations" title="افتح تبويب الإلغاءات"><b class="neg">${k.cancel_pending}</b><span>🚫 ألغوا بعد الدفع — مصير العربون لم يُقرَّر</span></div>` : ''}`;
+  $$('#kpis .kpi[data-goto]').forEach((el) => el.onclick = () => $(`#tabs button[data-tab="${el.dataset.goto}"]`).click());
 }
 
 function renderChips() {
@@ -586,6 +604,16 @@ function badge(s) {
   const [bg, fg, pure] = calColor(s);
   return `<span class="badge" style="background:${bg};color:${fg};border:1px solid ${pure}66">${esc(s || '—')}</span>`;
 }
+
+// A cancelled booking that had money on it carries a marker next to its badge: what was
+// decided about the advance, or that nothing was decided yet (the الإلغاءات tab has it).
+const cancelMark = (r) => {
+  if (r.status !== 'ملغي') return '';
+  if (r.cancel_decision === 'refund') return ' <span class="cmark" title="العربون يُسترد / مسترد — تبويب الإلغاءات">↩</span>';
+  if (r.cancel_decision === 'kept') return ' <span class="cmark" title="العربون محتفظ به">💰</span>';
+  if (Number(r.deposit) > 0) return ' <span class="cmark neg" title="دفع عربوناً ولم يُقرَّر مصيره — تبويب الإلغاءات">💰؟</span>';
+  return '';
+};
 
 // Status priority for the date check: real bookings first, then advance, inquiries, cancelled last.
 const DATE_RANK = (s) => s === 'مؤكد' || s === 'مكتمل' ? 0 : s === 'دفع العربون' ? 1 : s === 'ملغي' ? 3 : 2;
@@ -639,7 +667,7 @@ function renderRows() {
         <td data-l="النوع">${esc(r.occasion || '—')}</td>
         <td data-l="المدينة">${esc(r.city || '—')}</td>
         <td data-l="القاعة">${esc(r.venue || '—')}</td>
-        <td data-l="الحالة">${badge(r.status)}</td>
+        <td data-l="الحالة">${badge(r.status)}${cancelMark(r)}</td>
         <td data-l="الدفع">${esc(r.payment_status || '—')}</td>
         <td data-l="المتبقي" class="num">${money(r.remaining)}</td>
         <td data-l="الطاقم">${staffCell(r)}</td>
@@ -877,7 +905,7 @@ const payRowHtml = (p) => `<tr data-open="${p.booking_id}" style="cursor:pointer
   <td class="num">${dmy(p.paid_on)}</td>
   <td class="num muted">${esc(p.booking_no || '#' + p.booking_id)}</td>
   <td><b>${esc(fullName(p))}</b>${p.payer ? `<div class="muted" style="font-size:.72rem">👤 الدافع: ${esc(p.payer)}</div>` : ''}</td>
-  <td>${p.kind === 'إكرامية' ? '🎁 ' : ''}${esc(p.kind || '—')}</td>
+  <td>${payIcon(p)}${esc(p.kind || '—')}</td>
   <td>${esc(p.method || '—')}${p.method_ref ? `<div class="muted" style="font-size:.72rem">${esc(p.method_ref)}</div>` : ''}</td>
   <td class="num ${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</td>
   <td class="muted" style="white-space:normal;font-size:.78rem">${esc(p.note || '')}</td>
@@ -917,7 +945,7 @@ function evPayHtml(e) {
   const real = sumCol(ps.filter((p) => p.kind !== 'إكرامية'), 'amount');
   return `<div class="evpays">${head}
     ${ps.map((p) => `<div class="evpay">
-      <span>${p.kind === 'إكرامية' ? '🎁 ' : ''}<b>${esc(p.kind || 'دفعة')}</b> — <b class="${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</b> — ${esc(p.method || 'طريقة غير محدّدة')}</span>
+      <span>${payIcon(p)}<b>${esc(p.kind || 'دفعة')}</b> — <b class="${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</b> — ${esc(p.method || 'طريقة غير محدّدة')}</span>
       <span class="muted" style="font-size:.74rem">${dmy(p.paid_on)}${p.payer ? ' · 👤 ' + esc(p.payer) : ''}${p.method_ref ? ' · ' + esc(p.method_ref) : ''}${p.note ? ' · ' + esc(p.note) : ''}</span>
     </div>`).join('')}
     <span class="muted" style="font-size:.78rem">مجموع الدفعات <b class="pos">${money(real)}</b>${tips
@@ -939,9 +967,12 @@ function renderFinance() {
     : Number(m.deposit) || 0);
   const advIn = sumCol(adv, 'deposit');
   const advDue = sumCol(adv, 'remaining');
-  // Net income counts the money actually RECEIVED (paid on events + advances in hand),
-  // never the demanded price.
-  const received = (k.ev_paid || 0) + advIn;
+  // الإلغاءات: advances SARAB kept from cancelled bookings are income nothing else counts
+  // (no P&L row, not a live booking); refunds already net out of every ledger sum.
+  const can = FIN.cancellations || { n: 0, paid_in: 0, refunded: 0, kept: 0, pending: 0, pending_n: 0 };
+  // Net income counts the money actually RECEIVED (paid on events + advances in hand +
+  // advances kept after a cancellation), never the demanded price.
+  const received = (k.ev_paid || 0) + advIn + (can.kept || 0);
   const net = received - (k.ev_expenses || 0) - (k.gen_expenses || 0);
   const evNet = sumCol(FIN.events, 'net_profit');
 
@@ -1033,7 +1064,9 @@ function renderFinance() {
   box.innerHTML = `
     <section class="kpis" style="padding:0">
       <div class="kpi"><b>${money(k.revenue)}</b><span>إيرادات متوقعة (أسعار الحجوزات)</span></div>
-      <div class="kpi gold"><b>${money(received)}</b><span>محصّل فعلياً (مدفوعات + عرابين)</span></div>
+      <div class="kpi gold"><b>${money(received)}</b><span>محصّل فعلياً (مدفوعات + عرابين${can.kept ? ' + عرابين إلغاء محتفظ بها' : ''})</span></div>
+      ${can.n ? `<div class="kpi" id="fincan" data-goto="cancellations" title="افتح تبويب الإلغاءات" style="cursor:pointer"><b>${money(can.kept)}</b><span>🚫 عرابين إلغاءات محتفظ بها${
+        can.refunded ? ` · ↩ مسترد ${money(can.refunded)}` : ''}${can.pending_n ? ` · <b class="neg" style="display:inline;font-size:inherit">${can.pending_n}</b> بانتظار قرار (${money(can.pending)})` : ''}</span></div>` : ''}
       ${PAY ? `<div class="kpi"><b>${money(PAY.kpi.month_now)}</b><span>محصّل هذا الشهر (سجل المدفوعات)</span></div>` : ''}
       ${PAY && PAY.kpi.tips ? `<div class="kpi"><b>${money(PAY.kpi.tips)}</b><span>🎁 إكراميات — خارج حساب الحجوزات</span></div>` : ''}
       <div class="kpi"><b>${money((k.ev_expenses || 0) + (k.gen_expenses || 0))}</b><span>إجمالي المصاريف</span></div>
@@ -1080,7 +1113,8 @@ function renderFinance() {
     ${sec('fin_months', '🗓 الأشهر — المقبوضات وصافي الدخل', mHead, monthsBody, true)}
     ${PAY ? sec('fin_pay', '💳 سجل المدفوعات',
       `${PAY.kpi.n} دفعة · إجمالي مسجّل <b class="pos">${money(PAY.kpi.total)}</b> · هذا الشهر <b>${money(PAY.kpi.month_now)}</b>${
-        PAY.kpi.tips ? ` · 🎁 إكرامية <b>${money(PAY.kpi.tips)}</b>` : ''}`,
+        PAY.kpi.tips ? ` · 🎁 إكرامية <b>${money(PAY.kpi.tips)}</b>` : ''}${
+        PAY.kpi.refunds ? ` · ↩ مسترد <b class="neg">${money(PAY.kpi.refunds)}</b>` : ''}`,
       ledgerBody, true) : ''}
     ${sec('fin_adv', '💰 عرابين محصّلة — حجوزات قادمة',
       `${adv.length} حجزاً · محصّل مقدماً <b class="pos">${money(advIn)}</b> · متبقٍ للتحصيل <b>${money(advDue)}</b>`,
@@ -1156,6 +1190,8 @@ function renderFinance() {
 
   wireSecs(box);
   renderPayRows();
+  const fc = $('#fincan', box);
+  if (fc) fc.onclick = () => $('#tabs button[data-tab="cancellations"]').click();
 
   const send = (table) => (method, body) =>
     api('/office/api/finance', { method, body: JSON.stringify({ table, ...body }) })
@@ -1944,6 +1980,10 @@ async function loadRows() {
 const F = [
   ['booking_no', 'رقم الحجز', 'ro'],
   ['status', 'الحالة', 'select:status'],
+  // the cancellation record — shown only while الحالة is ملغي (2026-09-03)
+  ['cancelled_at', 'تاريخ الإلغاء', 'date'],
+  ['cancel_decision', 'مصير العربون بعد الإلغاء', 'decision'],
+  ['cancel_reason', 'سبب الإلغاء', 'textarea'],
   ['first_name', 'الاسم الأول'], ['last_name', 'اسم العائلة'],
   ['phone', 'الهاتف / واتساب'], ['city', 'مدينة المناسبة (مكان الحدث)', 'list:cities'],
   // سكن العميل حين يختلف عن مدينة المناسبة — حقل جديد (2026-08-24)، يُعبّأ يدوياً
@@ -1972,7 +2012,11 @@ function fieldHtml([key, label, kind]) {
   else if (kind === 'date') input = `<input id="f_${key}" type="date">`;
   else if (kind === 'number') input = `<input id="f_${key}" type="number" step="any" inputmode="decimal">`;
   else if (kind === 'check') input = `<input id="f_${key}" type="checkbox" style="width:auto;height:1.2rem">`;
-  else if (kind === 'textarea') input = `<textarea id="f_${key}" rows="3"></textarea>`;
+  else if (kind === 'textarea') input = `<textarea id="f_${key}" rows="${key === 'cancel_reason' ? 2 : 3}"></textarea>`;
+  else if (kind === 'decision') input = `<select id="f_${key}">
+      <option value="">— لم يُقرَّر بعد —</option>
+      <option value="kept">💰 نحتفظ بالعربون (لا يُسترد)</option>
+      <option value="refund">↩ يُسترد للعميل (يُسجَّل الاسترداد من المدفوعات)</option></select>`;
   else if (kind && kind.startsWith('select:')) {
     const opts = state.meta.options[kind.slice(7)] || [];
     input = `<select id="f_${key}"><option value=""></option>${opts.map((o) => `<option>${esc(o)}</option>`).join('')}</select>`;
@@ -1992,7 +2036,8 @@ function fieldHtml([key, label, kind]) {
   } else input = `<input id="f_${key}">`;
   // القاعة grows a hint row under it: the chosen city's known halls as one-tap chips.
   const extra = key === 'venue' ? '<div class="vhint" id="venueHint"></div>' : '';
-  return `<div class="field${full}"><label for="f_${key}">${label}</label>${input}${extra}</div>`;
+  const cancelCls = key.startsWith('cancel') ? ' cancel-only' : '';
+  return `<div class="field${full}${cancelCls}"><label for="f_${key}">${label}</label>${input}${extra}</div>`;
 }
 
 // Halls already used in the typed city (normalized like the server's cityMatch),
@@ -2107,8 +2152,12 @@ async function loadIntel() {
 // sees is always what is stored.
 // إكرامية = a tip: recorded as cash in hand (ledger + sums) but never counted toward
 // the booking — no deposit/remaining/receipt movement (server rule in payments.js).
-const PAY_KINDS = ['عربون', 'دفعة', 'إكرامية'];
+// استرداد = money handed back (an advance after a cancellation): stored negative by the
+// server, so it reverses العربون/المتبقي and nets out of every cash sum on its own.
+const PAY_KINDS = ['عربون', 'دفعة', 'إكرامية', 'استرداد'];
 const isTip = (p) => p.kind === 'إكرامية';
+const isRefund = (p) => p.kind === 'استرداد';
+const payIcon = (p) => isTip(p) ? '🎁 ' : isRefund(p) ? '↩ ' : '';
 
 // مرجع الدفع placeholder follows the chosen method — a bank transfer wants the payer's
 // account details / reference number, a check wants its number, a card its last digits.
@@ -2139,6 +2188,7 @@ function renderPayments(bookingId, list) {
   const real = list.filter((p) => !isTip(p));
   const total = real.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const tips = list.reduce((s, p) => s + (isTip(p) ? Number(p.amount) || 0 : 0), 0);
+  const refunds = list.reduce((s, p) => s + (isRefund(p) ? -(Number(p.amount) || 0) : 0), 0);
   state.payTotal = real.length ? total : null;
   const methods = state.meta.options.payment_method || [];
   const st = $('#f_status') ? $('#f_status').value : '';
@@ -2147,10 +2197,11 @@ function renderPayments(bookingId, list) {
   box.innerHTML = `
     <div class="payhead"><b>💳 المدفوعات</b><span class="muted">${
       list.length ? `${list.length} دفعة · المجموع <b class="pos">${money(total)}</b>${
-        tips ? ` · 🎁 إكرامية <b class="pos">${money(tips)}</b>` : ''}` : 'لا دفعات مسجّلة بعد'}</span></div>
+        tips ? ` · 🎁 إكرامية <b class="pos">${money(tips)}</b>` : ''}${
+        refunds ? ` · ↩ مسترد <b class="neg">${money(refunds)}</b>` : ''}` : 'لا دفعات مسجّلة بعد'}</span></div>
     ${list.map((p) => `<div class="payrow">
       <span class="num muted">${dmy(p.paid_on)}</span>
-      <span>${isTip(p) ? '🎁 ' : ''}${esc(p.kind || 'دفعة')}${p.method ? ` · ${esc(p.method)}` : ''}</span>
+      <span>${payIcon(p)}${esc(p.kind || 'دفعة')}${p.method ? ` · ${esc(p.method)}` : ''}</span>
       ${p.payer ? `<span class="muted" title="من دفع فعلياً">👤 ${esc(p.payer)}</span>` : ''}
       <b class="${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</b>
       ${p.doc_number ? `<span class="muted num" title="مستند صادر">🧾 ${esc(p.doc_number)}</span>` : ''}
@@ -2159,7 +2210,7 @@ function renderPayments(bookingId, list) {
     </div>`).join('')}
     <div class="payform">
       <input id="p_amount" type="number" step="any" inputmode="decimal" placeholder="المبلغ ₪">
-      <select id="p_kind" title="عربون يُضاف لحقل العربون — دفعة تُنقص المتبقي فقط — إكرامية تُسجَّل كنقد إضافي ولا تمسّ حساب الحجز">${
+      <select id="p_kind" title="عربون يُضاف لحقل العربون — دفعة تُنقص المتبقي فقط — إكرامية تُسجَّل كنقد إضافي ولا تمسّ حساب الحجز — استرداد: مبلغ أُعيد للعميل، يُخصم من العربون والمتبقي">${
         PAY_KINDS.map((k) => `<option${(real.length ? k === 'دفعة' : k === 'عربون') ? ' selected' : ''}>${k}</option>`).join('')}</select>
       <select id="p_method"><option value="">طريقة الدفع…</option>${methods.map((m) => `<option>${esc(m)}</option>`).join('')}</select>
       <input id="p_date" type="date" value="${localISO()}">
@@ -2187,8 +2238,9 @@ function renderPayments(bookingId, list) {
         payer: $('#p_payer').value, method_ref: $('#p_ref').value,
       }) });
       afterPayMutation(bookingId, r);
-      toast(kind === 'إكرامية'
-        ? 'سُجّلت الإكرامية ✓ — خارج حساب الحجز' : 'سُجّلت الدفعة ✓ — حُدّث العربون والمتبقي');
+      toast(kind === 'إكرامية' ? 'سُجّلت الإكرامية ✓ — خارج حساب الحجز'
+        : kind === 'استرداد' ? 'سُجّل الاسترداد ✓ — خُصم من العربون والمتبقي'
+        : 'سُجّلت الدفعة ✓ — حُدّث العربون والمتبقي');
     } catch (e) {
       if (e.message !== 'unauthorized') toast('لم تُسجّل الدفعة — تحقق من القيم', true);
       btn.disabled = false;
@@ -2198,6 +2250,7 @@ function renderPayments(bookingId, list) {
     const p = list.find((x) => x.id === Number(el.dataset.id));
     if (!p || !confirm(isTip(p)
       ? `حذف الإكرامية ${money(p.amount)}؟`
+      : isRefund(p) ? `حذف الاسترداد ${money(-p.amount)}؟ سيعود المبلغ إلى العربون.`
       : `حذف دفعة ${money(p.amount)}؟ سيعود المبلغ إلى المتبقي.`)) return;
     try {
       const r = await api('/office/api/payments', { method: 'DELETE', body: JSON.stringify({ id: p.id }) });
@@ -2226,6 +2279,7 @@ function afterPayMutation(bookingId, r) {
     }
     if (state.tab === 'bookings' || state.tab === 'callback') renderRows();
     if (state.tab === 'finance') loadFinance().catch(() => {});
+    if (state.tab === 'cancellations') loadCancellations().catch(() => {});
   }
   renderPayments(bookingId, r.payments);
   loadMeta().catch(() => {});
@@ -2276,6 +2330,15 @@ function openDrawer(id, presetDate) {
     }
     el.value = v ?? '';
   }
+  // The cancellation strip only shows for a cancelled booking; switching to ملغي stamps
+  // today as تاريخ الإلغاء when none is set (the server does the same on save).
+  const syncCancel = () => {
+    const on = $('#f_status').value === 'ملغي';
+    $$('#dBody .cancel-only').forEach((el) => el.style.display = on ? '' : 'none');
+    if (on && !$('#f_cancelled_at').value) $('#f_cancelled_at').value = localISO();
+  };
+  $('#f_status').addEventListener('change', syncCancel);
+  syncCancel();
   // occasion combo: choosing "➕ نوع آخر…" lets the owner type a brand-new type inline
   const occ = $('#f_occasion');
   if (occ && occ.tagName === 'SELECT') {
@@ -2330,7 +2393,7 @@ function openDrawer(id, presetDate) {
     if (!confirm(`حذف ${row.booking_no || '#' + row.id} — ${fullName(row)} نهائياً؟ لا يمكن التراجع.`)) return;
     api('/office/api/bookings/' + row.id, { method: 'DELETE' })
       .then(() => { closeDrawer(); toast('حُذف ✓'); return Promise.all([loadMeta(), state.tab === 'calendar' ? loadCalendarTab() : loadRows()]); })
-      .then(() => { if (state.tab === 'whatsapp') return loadWa(); })
+      .then(() => { if (state.tab === 'whatsapp') return loadWa(); if (state.tab === 'cancellations') return loadCancellations(); })
       .catch((e) => { if (e.message !== 'unauthorized') toast('لم يُحذف', true); });
   };
   $('#dMeta').innerHTML = row
@@ -2369,9 +2432,198 @@ async function save() {
     closeDrawer();
     await Promise.all([loadMeta(), state.tab === 'calendar' ? loadCalendarTab() : loadRows()]);
     if (state.tab === 'whatsapp') await loadWa();
+    if (state.tab === 'cancellations') await loadCancellations();
   } catch (e) {
     if (e.message !== 'unauthorized') toast('لم يتم الحفظ — حاول مجدداً', true);
   }
+}
+
+// ---------- 🚫 الإلغاءات — cancelled after paying: what goes back, what stays ----------
+// The status stays ملغي; this tab lists those cancellations that involved money, with
+// what the client paid (from the payments ledger), what was refunded (استرداد rows) and
+// what SARAB kept — and lets the owner decide per booking and record the refund itself.
+// The finance tab reads the very same server rows (kept advances count as income there).
+let CAN = null;              // /office/api/cancellations payload
+let canFilter = 'money';     // 'money' (cash involved) | a state | 'all' (every ملغي)
+const canOpen = new Set();   // expanded rows survive a re-render
+
+const CAN_STATES = {
+  pending:    ['لم يُقرَّر بعد',                   'rgba(201,162,78,.34)',  '#FAEFCE', '#C9A24E'],
+  refund_due: ['يُسترد — لم يُدفع بعد',            'rgba(127,179,201,.36)', '#E1F1F8', '#7FB3C9'],
+  refunded:   ['مسترد بالكامل',                   'rgba(134,185,138,.36)', '#E4F5E6', '#86B98A'],
+  partial:    ['استرداد جزئي — الباقي محتفظ به',  'rgba(190,150,104,.36)', '#F6E9D6', '#BE9668'],
+  kept:       ['محتفظ به',                        'rgba(190,150,104,.36)', '#F6E9D6', '#BE9668'],
+  none:       ['بلا دفعات',                       'rgba(194,161,121,.16)', 'var(--muted)', 'var(--muted)'],
+};
+const canBadge = (st) => {
+  const [label, bg, fg, pure] = CAN_STATES[st] || CAN_STATES.none;
+  return `<span class="badge" style="background:${bg};color:${fg};border:1px solid ${pure}66">${label}</span>`;
+};
+const CAN_CHIPS = [['money', 'الكل (بدفعات)'], ['pending', 'لم يُقرَّر'], ['refund_due', 'يُسترد'],
+  ['refunded', 'مسترد'], ['kept', 'محتفظ به'], ['all', 'كل الإلغاءات']];
+const canMatch = (r, f) => f === 'all' ? true : f === 'money' ? r.state !== 'none'
+  : f === 'kept' ? (r.state === 'kept' || r.state === 'partial') : r.state === f;
+
+async function loadCancellations() {
+  CAN = await api('/office/api/cancellations');
+  renderCancellations();
+}
+
+// The expanded panel under a row: the decision, the refund form, the cancellation
+// details, and the payment trail. Built on first open, rebuilt after every change.
+function canDetailHtml(r) {
+  const methods = (state.meta && state.meta.options.payment_method) || [];
+  const dec = r.cancel_decision;
+  const why = r.state === 'pending' ? `دفع العميل <b>${money(r.paid_in)}</b> ثم ألغى — قرّر: نحتفظ بالمبلغ أم نُعيده؟`
+    : r.state === 'refund_due' ? `قرّرت إعادة العربون — ما زال عليك دفع <b class="neg">${money(r.due)}</b> للعميل. سجّل الاسترداد عند تحويله.`
+    : r.state === 'refunded' ? `أُعيد للعميل <b>${money(r.refunded)}</b> بالكامل — لا شيء محسوب كدخل من هذا الحجز.`
+    : r.state === 'partial' ? `أُعيد <b>${money(r.refunded)}</b> واحتُفظ بـ <b class="pos">${money(r.kept)}</b> — المحتفظ به يُحسب دخلاً في المالية.`
+    : r.state === 'kept' ? `احتفظنا بـ <b class="pos">${money(r.kept)}</b> — يُحسب دخلاً في المالية (محصّل فعلياً).`
+    : 'لا دفعات مسجّلة على هذا الحجز — الإلغاء بلا أثر مالي.';
+  const canRefund = r.paid_in - r.refunded > 0;
+  return `<div class="cdet">
+    <div class="col">
+      <b class="h">مصير العربون</b>
+      <div class="chips">
+        <button type="button" class="chip${dec === 'kept' ? ' on' : ''}" data-dec="kept">💰 نحتفظ بالعربون</button>
+        <button type="button" class="chip${dec === 'refund' ? ' on' : ''}" data-dec="refund">↩ يُسترد للعميل</button>
+        ${dec ? '<button type="button" class="chip" data-dec="">↺ إلغاء القرار</button>' : ''}
+      </div>
+      <p>${why}</p>
+      ${r.no_ledger ? `<p class="neg">⚠ المبلغ مأخوذ من حقل «العربون المدفوع» — لا سطر له في سجل المدفوعات. افتح الحجز وسجّل العربون من «سجّل دفعة» ليكتمل السجل.</p>` : ''}
+      ${canRefund ? `<div class="cform">
+        <input class="c_amount" type="number" step="any" inputmode="decimal" value="${r.paid_in - r.refunded}" placeholder="المبلغ المسترد ₪">
+        <select class="c_method"><option value="">طريقة الإعادة…</option>${methods.map((m) => `<option>${esc(m)}</option>`).join('')}</select>
+        <input class="c_date" type="date" value="${localISO()}">
+        <input class="c_ref" placeholder="مرجع الحوالة (اختياري)">
+        <input class="c_note" placeholder="ملاحظة (اختياري)">
+        <button type="button" class="btn btn--sm c_refund">↩ سجّل الاسترداد — أُعيد للعميل</button>
+      </div>` : ''}
+    </div>
+    <div class="col">
+      <b class="h">تفاصيل الإلغاء</b>
+      <label>تاريخ الإلغاء <input class="c_cancelled_at" type="date" value="${esc(r.cancelled_at || '')}"></label>
+      <label>سبب الإلغاء <input class="c_reason" value="${esc(r.cancel_reason || '')}" placeholder="مثال: تأجيل الفرح، اختار مزوّداً آخر…"></label>
+      <div class="chips">
+        <button type="button" class="btn btn--sm btn--ghost c_save">حفظ التفاصيل</button>
+        <button type="button" class="btn btn--sm btn--ghost c_open">فتح الحجز ✎</button>
+      </div>
+      <b class="h">💳 الدفعات المسجّلة</b>
+      ${r.payments.length ? r.payments.map((p) => `<div class="cpay">
+        <span>${payIcon(p)}<b>${esc(p.kind || 'دفعة')}</b> — <b class="${p.amount < 0 ? 'neg' : 'pos'}">${money(p.amount)}</b> — ${esc(p.method || 'طريقة غير محدّدة')}</span>
+        <span class="muted" style="font-size:.74rem">${dmy(p.paid_on)}${p.payer ? ' · 👤 ' + esc(p.payer) : ''}${p.method_ref ? ' · ' + esc(p.method_ref) : ''}${p.note ? ' · ' + esc(p.note) : ''}</span>
+      </div>`).join('') : '<p>لا دفعات مسجّلة على هذا الحجز</p>'}
+    </div>
+  </div>`;
+}
+
+function wireCanDetail(cell, r) {
+  const refresh = () => Promise.all([loadCancellations(), loadMeta()]);
+  const patch = (body) => api('/office/api/bookings/' + r.id, { method: 'PATCH', body: JSON.stringify(body) })
+    .then((res) => {
+      // keep the grid's cached row (and its marker) honest without a reload
+      const i = state.rows.findIndex((x) => x.id === r.id);
+      if (i !== -1 && res.row) state.rows[i] = res.row;
+      return res;
+    });
+  $$('[data-dec]', cell).forEach((b) => b.onclick = async () => {
+    const d = b.dataset.dec;
+    try {
+      await patch({ cancel_decision: d });
+      toast(d === 'kept' ? 'سُجّل: العربون محتفظ به ✓' : d === 'refund' ? 'سُجّل: العربون يُسترد — سجّل الاسترداد عند دفعه' : 'أُلغي القرار');
+      await refresh();
+    } catch (e) { if (e.message !== 'unauthorized') toast('لم يُحفظ', true); }
+  });
+  $('.c_save', cell).onclick = async () => {
+    try {
+      await patch({ cancelled_at: $('.c_cancelled_at', cell).value, cancel_reason: $('.c_reason', cell).value });
+      toast('حُفظت التفاصيل ✓');
+      await refresh();
+    } catch (e) { if (e.message !== 'unauthorized') toast('لم يُحفظ', true); }
+  };
+  $('.c_open', cell).onclick = () => openDrawerById(r.id);
+  const rb = $('.c_refund', cell);
+  if (rb) rb.onclick = async () => {
+    const amount = parseFloat($('.c_amount', cell).value);
+    if (!Number.isFinite(amount) || amount <= 0) { toast('اكتب المبلغ المسترد أولاً', true); return; }
+    rb.disabled = true;
+    try {
+      const res = await api('/office/api/payments', { method: 'POST', body: JSON.stringify({
+        booking_id: r.id, amount, kind: 'استرداد',
+        method: $('.c_method', cell).value, paid_on: $('.c_date', cell).value,
+        method_ref: $('.c_ref', cell).value, note: $('.c_note', cell).value,
+      }) });
+      const i = state.rows.findIndex((x) => x.id === r.id);
+      if (i !== -1 && res.booking) state.rows[i] = res.booking;
+      toast(`سُجّل استرداد ${money(amount)} ✓ — خُصم من العربون وسجل المدفوعات`);
+      await refresh();
+    } catch (e) {
+      if (e.message !== 'unauthorized') toast('لم يُسجَّل الاسترداد — تحقق من القيم', true);
+      rb.disabled = false;
+    }
+  };
+}
+
+function renderCancellations() {
+  const box = $('#cancellations');
+  const all = (CAN && CAN.rows) || [];
+  const s = (CAN && CAN.summary) || { n: 0, paid_in: 0, refunded: 0, kept: 0, pending: 0, pending_n: 0 };
+  const shown = all.filter((r) => canMatch(r, canFilter));
+  const cnt = (f) => all.filter((r) => canMatch(r, f)).length;
+  box.innerHTML = `
+    <section class="kpis" style="padding:0">
+      <div class="kpi"><b>${s.n}</b><span>إلغاءات بعد دفع مبلغ</span></div>
+      <div class="kpi"><b>${money(s.paid_in)}</b><span>ما دفعه هؤلاء العملاء</span></div>
+      <div class="kpi"><b class="${s.refunded ? 'neg' : ''}">${money(s.refunded)}</b><span>↩ أُعيد للعملاء</span></div>
+      <div class="kpi gold"><b>${money(s.kept)}</b><span>💰 محتفظ به — يُحسب دخلاً في المالية</span></div>
+      <div class="kpi"><b class="${s.pending_n ? 'neg' : ''}">${money(s.pending)}</b><span>بانتظار قرار أو استرداد (${s.pending_n})</span></div>
+    </section>
+    <div class="filters" style="padding:.1rem 0 0">
+      <div class="chips">${CAN_CHIPS.map(([f, label]) => `<button class="chip${canFilter === f ? ' on' : ''}" data-cf="${f}">${label} · ${cnt(f)}</button>`).join('')}</div>
+      <span class="count">${shown.length} سجل</span>
+    </div>
+    <div class="tablebox" id="canbox"><table>
+      <thead><tr><th>الرقم</th><th>العميل</th><th>الهاتف</th><th>تاريخ المناسبة</th><th>تاريخ الإلغاء</th><th>المدفوع</th><th>↩ المسترد</th><th>💰 المحتفظ به</th><th>الحالة</th><th>السبب</th></tr></thead>
+      <tbody>${shown.map((r) => {
+        const wa = waLink(r.phone);
+        const keptFinal = r.state === 'kept' || r.state === 'partial';
+        return `<tr data-canrow="${r.id}">
+        <td class="num muted">${esc(r.booking_no || '#' + r.id)}</td>
+        <td><b>${esc(r.name || '—')}</b>${r.occasion || r.city ? `<div class="muted" style="font-size:.72rem">${esc([r.occasion, r.city].filter(Boolean).join(' · '))}</div>` : ''}</td>
+        <td class="num">${esc(r.phone || '—')} ${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="واتساب">✆</a>` : ''}</td>
+        <td class="num">${dmy(r.event_date)}</td>
+        <td class="num">${dmy(r.cancelled_at)}</td>
+        <td class="num">${money(r.paid_in)}${r.no_ledger ? ' <span class="neg" title="من حقل العربون — لا سطر له في سجل المدفوعات">⚠</span>' : ''}</td>
+        <td class="num${r.refunded ? ' neg' : ''}">${money(r.refunded)}</td>
+        <td class="num${keptFinal && r.kept ? ' pos' : ''}">${money(r.kept)}</td>
+        <td>${canBadge(r.state)} <span class="muted" style="font-size:.68rem">▾</span></td>
+        <td class="muted" style="font-size:.8rem;max-width:260px">${esc(r.cancel_reason || '—')}</td>
+      </tr><tr data-candet="${r.id}" style="display:none"><td colspan="10" style="background:var(--panel-2)"></td></tr>`;
+      }).join('') || `<tr><td colspan="10"><div class="empty">${canFilter === 'all' ? 'لا إلغاءات بعد' : canFilter === 'money'
+        ? 'لا إلغاءات بعد دفع مبلغ — حين يُلغي عميل دفع عربوناً (الحالة ← ملغي) يظهر هنا لتقرّر مصير عربونه'
+        : 'لا سجلات في هذه التصفية'}</div></td></tr>`}</tbody>
+      ${shown.length ? `<tfoot><tr><td colspan="5">المجموع (${shown.length})</td>
+        <td class="num">${money(sumCol(shown, 'paid_in'))}</td>
+        <td class="num neg">${money(sumCol(shown, 'refunded'))}</td>
+        <td class="num pos">${money(sumCol(shown, 'kept'))}</td><td colspan="2"></td></tr></tfoot>` : ''}
+    </table>
+    <div class="secnote">اضغط على السطر لتقرّر مصير العربون أو تسجّل الاسترداد · المدفوع والمسترد من سجل المدفوعات (استرداد = سطر بمبلغ سالب، يُخصم من العربون والمتبقي ومن مقبوضات شهره) · المحتفظ به يُضاف إلى «محصّل فعلياً» في المالية بعد القرار · ⚠ = عربون مكتوب في الحقل فقط بلا سطر في السجل</div></div>`;
+  $$('.chip[data-cf]', box).forEach((c) => c.onclick = () => { canFilter = c.dataset.cf; renderCancellations(); });
+  const open = (id) => {
+    const det = $(`tr[data-candet="${id}"]`, box);
+    const r = all.find((x) => x.id === id);
+    if (!det || !r) return;
+    const cell = det.firstElementChild;
+    if (!cell.dataset.built) { cell.innerHTML = canDetailHtml(r); cell.dataset.built = '1'; wireCanDetail(cell, r); }
+    det.style.display = '';
+  };
+  $$('tr[data-canrow]', box).forEach((tr) => tr.onclick = () => {
+    const id = Number(tr.dataset.canrow);
+    if (canOpen.has(id)) { canOpen.delete(id); $(`tr[data-candet="${id}"]`, box).style.display = 'none'; }
+    else { canOpen.add(id); open(id); }
+  });
+  for (const id of canOpen) open(id);
+  $('#count').textContent = `${shown.length} إلغاء`;
 }
 
 // ---------- wiring ----------
@@ -2384,7 +2636,7 @@ $('#refreshBtn').onclick = () => Promise.all([loadMeta(), loadRows()]).then(() =
 $('#csvBtn').onclick = () => {
   const cols = ['booking_no','name','first_name','last_name','phone','event_date','occasion','city','client_city','region','venue',
     'status','payment_status','price','deposit','remaining','staff','staff_count',
-    'lead_source','interest','callback','notes','source','lang','created_at'];
+    'lead_source','interest','callback','notes','cancelled_at','cancel_decision','cancel_reason','source','lang','created_at'];
   const csv = [cols.join(',')]
     .concat(state.rows.map((r) => cols.map((c) => `"${String(r[c] ?? '').replace(/"/g, '""')}"`).join(',')))
     .join('\n');
@@ -2644,7 +2896,7 @@ $('#upcoming').onchange = (e) => { clearDateCheck(false); state.filters.upcoming
 $('#nopast').onchange = (e) => { clearDateCheck(false); state.filters.nopast = e.target.checked; loadRows(); };
 $('#order').onchange = (e) => { clearDateCheck(false); state.filters.order = e.target.value; loadRows(); };
 
-const PANES = { bookings: '#gridbox', callback: '#gridbox', calendar: '#calendar', cities: '#pricing', finance: '#finance', insights: '#insights', inventory: '#inventory', visitors: '#visitors', capi: '#capi', whatsapp: '#whatsapp' };
+const PANES = { bookings: '#gridbox', callback: '#gridbox', calendar: '#calendar', cities: '#pricing', finance: '#finance', insights: '#insights', inventory: '#inventory', visitors: '#visitors', capi: '#capi', whatsapp: '#whatsapp', cancellations: '#cancellations' };
 $$('#tabs button').forEach((b) => b.onclick = () => {
   $$('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
   state.tab = b.dataset.tab;
@@ -2652,7 +2904,7 @@ $$('#tabs button').forEach((b) => b.onclick = () => {
   $('#filters').style.display = pane === '#gridbox' ? '' : 'none';
   $('#dateVerdict').style.display = 'none';
   $('#calBox').style.display = 'none';
-  for (const sel of ['#gridbox', '#calendar', '#pricing', '#finance', '#insights', '#inventory', '#visitors', '#capi', '#whatsapp']) $(sel).style.display = sel === pane ? '' : 'none';
+  for (const sel of ['#gridbox', '#calendar', '#pricing', '#finance', '#insights', '#inventory', '#visitors', '#capi', '#whatsapp', '#cancellations']) $(sel).style.display = sel === pane ? '' : 'none';
   if (state.tab === 'calendar') loadCalendarTab().catch(() => {});
   else if (state.tab === 'cities') loadPricing().catch(() => {});
   else if (state.tab === 'finance') loadFinance().catch(() => {});
@@ -2661,6 +2913,7 @@ $$('#tabs button').forEach((b) => b.onclick = () => {
   else if (state.tab === 'visitors') loadVisitors().catch(() => {});
   else if (state.tab === 'capi') loadCapi().catch(() => {});
   else if (state.tab === 'whatsapp') loadWa().catch(() => {});
+  else if (state.tab === 'cancellations') loadCancellations().catch(() => {});
   else loadRows();
 });
 

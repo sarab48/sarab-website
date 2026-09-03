@@ -4,7 +4,7 @@
   normally stay as the ملغي status).
   Auth: ../../_middleware.js.
 */
-import { cleanValue, ensureBookingNo, ensureEventFinance, ensureCityPrice, BOOKED_STATUSES } from '../bookings.js'
+import { cleanValue, ensureBookingNo, ensureEventFinance, ensureCityPrice, BOOKED_STATUSES, CANCELLED } from '../bookings.js'
 import { syncBookingCalendar, removeBookingCalendar } from '../../../../shared/gcal.js'
 
 const WRITABLE = [
@@ -12,6 +12,7 @@ const WRITABLE = [
   'email', 'city', 'client_city', 'region', 'venue', 'start_time', 'end_time', 'hours', 'guests',
   'package', 'price', 'deposit', 'remaining', 'payment_status', 'arrival_time',
   'staff', 'staff_count', 'lead_source', 'interest', 'callback', 'notes', 'status',
+  'cancelled_at', 'cancel_decision', 'cancel_reason',
 ]
 
 export async function onRequestGet({ env, params }) {
@@ -24,21 +25,43 @@ export async function onRequestPatch({ request, env, params }) {
   let body
   try { body = await request.json() } catch { return Response.json({ ok: false, error: 'bad-json' }, { status: 400 }) }
 
-  const sets = []
-  const vals = []
+  const fields = {}
   for (const k of WRITABLE) {
     if (!(k in body)) continue
     const v = cleanValue(k, body[k])
-    sets.push(`${k} = ?${vals.length + 1}`)
-    vals.push(v === undefined ? null : v)
+    fields[k] = v === undefined ? null : v
   }
-  if (!sets.length) return Response.json({ ok: false, error: 'no-fields' }, { status: 400 })
+  if (!Object.keys(fields).length) return Response.json({ ok: false, error: 'no-fields' }, { status: 400 })
+  const raw = []   // SET clauses written in SQL, no bind (stamps that must not overwrite)
 
   // Turning into a real booking stamps تاريخ الحجز automatically (never overwrites an
   // explicit value — neither one already saved nor one sent in this same edit).
   if (BOOKED_STATUSES.includes(body.status) && !('booked_at' in body)) {
-    sets.push("booked_at = COALESCE(booked_at, date('now'))")
+    raw.push("booked_at = COALESCE(booked_at, date('now'))")
   }
+  // The cancellation record follows the status. Cancelling stamps تاريخ الإلغاء unless
+  // this same edit sets it (the drawer sends every field, so an empty date must not
+  // blank a stamped one). Leaving ملغي closes the record: date + decision go, the reason
+  // stays as written. The refund rows in the ledger are history and are never touched.
+  if ('status' in fields) {
+    if (fields.status === CANCELLED) {
+      if (!fields.cancelled_at) {
+        delete fields.cancelled_at
+        raw.push("cancelled_at = COALESCE(cancelled_at, date('now'))")
+      }
+    } else {
+      fields.cancelled_at = null
+      fields.cancel_decision = null
+    }
+  }
+
+  const sets = []
+  const vals = []
+  for (const [k, v] of Object.entries(fields)) {
+    sets.push(`${k} = ?${vals.length + 1}`)
+    vals.push(v)
+  }
+  sets.push(...raw)
 
   vals.push(Number(params.id))
   const { meta } = await env.DB.prepare(`UPDATE bookings SET ${sets.join(', ')} WHERE id = ?${vals.length}`)

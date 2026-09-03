@@ -12,16 +12,25 @@ const WRITABLE = [
   'email', 'city', 'client_city', 'region', 'venue', 'start_time', 'end_time', 'hours', 'guests',
   'package', 'price', 'deposit', 'remaining', 'payment_status', 'arrival_time',
   'staff', 'staff_count', 'lead_source', 'interest', 'callback', 'notes', 'status',
+  'cancelled_at', 'cancel_decision', 'cancel_reason',
 ]
 
 // Statuses that mean "actually booked" — reaching one of them stamps booked_at.
 export const BOOKED_STATUSES = ['مؤكد', 'دفع العربون', 'مكتمل']
+// The cancelled status. A booking that cancels keeps it; the cancellation record
+// (cancelled_at / cancel_decision / cancel_reason, 2026-09-03) lives beside it so the
+// office can find clients who paid an advance and decide what happens to it.
+export const CANCELLED = 'ملغي'
+// What happens to the advance after a cancellation: kept by SARAB, or refunded to the
+// client (the refund itself is a ledger row — payments.js kind استرداد). NULL = undecided.
+export const CANCEL_DECISIONS = ['kept', 'refund']
 const NUMERIC = new Set(['hours', 'price', 'deposit', 'remaining', 'staff_count'])
 
 export function cleanValue(key, v) {
   if (v === undefined) return undefined
   if (v === null || v === '') return null
   if (key === 'callback') return v === true || v === 1 || v === '1' ? 1 : 0
+  if (key === 'cancel_decision') return CANCEL_DECISIONS.includes(String(v)) ? String(v) : null
   if (key === 'staff_count') {
     const n = Math.round(Number(v))
     return Number.isFinite(n) && n >= 0 ? n : null
@@ -187,6 +196,9 @@ export async function onRequestPost({ request, env }) {
   row.status ||= 'استفسار'
   row.added_at ||= new Date().toISOString().slice(0, 10)
   if (!row.booked_at && BOOKED_STATUSES.includes(row.status)) row.booked_at = row.added_at
+  // The cancellation record only exists on a cancelled booking.
+  if (row.status === CANCELLED) row.cancelled_at ||= row.added_at
+  else { row.cancelled_at = null; row.cancel_decision = null }
 
   row.booking_no = await nextBookingNo(env)
   row.source = 'office'

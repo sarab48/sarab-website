@@ -1016,3 +1016,68 @@ client easier").** Two efficiency features in the office dashboard:
   datalist order + chip fill + region auto-fill + manual-region wins, tab chips/
   grouping/filter/search/row-select. `_vccity.mjs` + `_vcity.mjs` re-run clean.
 - Deploy `774f7127` verified: apex 200, /office API 302 to Access.
+
+**2026-09-03 — الإلغاءات: clients who paid an advance, then cancelled (owner request:
+"a special status or tab to find them; for some I return the advance, for some not;
+all recorded; refunds calculated in the finance section").**
+
+- **Model.** The status stays `ملغي` (the owner's vocabulary; every `!= 'ملغي'` rule in
+  insights/calendar/conflicts keeps working). Three additive columns on `bookings`
+  (migration `db/migrations/2026-09-03-cancellations.sql`): `cancelled_at` (auto-
+  stamped `COALESCE(cancelled_at, date('now'))` when a PATCH/POST lands on ملغي without
+  an explicit date; cleared together with `cancel_decision` when the status leaves
+  ملغي — the reason survives), `cancel_decision` (`kept` | `refund` | NULL = undecided;
+  any other value is stored as NULL), `cancel_reason` (free text). `cleanValue` +
+  both WRITABLE lists accept them; the `[id].js` PATCH now builds a field map first so
+  the stamp/clear rules can adjust it before the SET list is rendered.
+- **A refund is a ledger row.** `payments.kind = 'استرداد'` (4th PAY_KIND) — the server
+  stores the amount NEGATIVE whatever sign was sent (`signed()`), so every existing
+  `SUM(amount)` (cash by month, by method, ledger totals, finance `byMonth.collected`
+  and monthly net) nets it out with no special casing. Toward the booking it is the
+  exact reverse of an advance (`depositPart()`: deposit AND remaining move back by it;
+  the P&L `paid` follows through `applyDelta`); PATCH kind flips keep the sign rule,
+  DELETE restores. Recording a refund on a cancelled booking with NO decision yet sets
+  `cancel_decision='refund'` (a refund IS the decision); a prior `kept` decision stands
+  (goodwill partial refund). New `kpi.refunds` in the payments payload.
+- **Read model `GET /office/api/cancellations`** (`cancellationRows` +
+  `cancellationSummary`, imported by finance.js so the tab and the finance tile can
+  never disagree): per ملغي booking `paid_in` (Σ positive non-tip ledger rows),
+  `refunded` (Σ negative rows), `kept = paid_in − refunded`, `state` ∈ pending /
+  refund_due (+`due`) / refunded / partial / kept / none, the booking's payment trail,
+  and `no_ledger` when the advance was only ever typed into the deposit field — then
+  `paid_in = deposit + refunded` (refunds reduce the field by exactly their amount, so
+  the original advance is reconstructable). Summary: `kept` counts only settled money
+  (kept/partial) — that is SARAB's income; `pending` = cash in hand whose fate is open
+  (undecided or refund still to be paid out).
+- **Finance.** `محصّل فعلياً` (and hence صافي الدخل) = ev_paid + advances in hand +
+  **kept cancellation advances**; new 🚫 tile (kept · refunded · N pending, click →
+  the tab); ledger section head shows `↩ مسترد`; kind filter offers استرداد.
+- **Dashboard.** New tab **الإلغاءات** (after إعادة الاتصال): 5 KPIs, state chips (الكل
+  بدفعات / لم يُقرَّر / يُسترد / مسترد / محتفظ به / كل الإلغاءات incl. money-less),
+  table (paid / refunded / kept / state badge / reason, ⚠ on no-ledger rows), tfoot
+  sums; a row expands (lazy, survives re-render via `canOpen`) into: decision chips
+  (PATCH cancel_decision), refund form prefilled with what is still refundable (POST
+  payments kind استرداد), cancel date + reason editor, payment trail, «فتح الحجز».
+  Drawer: a tinted `.cancel-only` strip (تاريخ الإلغاء / مصير العربون / سبب الإلغاء)
+  shown only while الحالة = ملغي, today pre-filled on switching; the payments panel
+  gains the استرداد kind with its own toast/confirm wording and a `↩ مسترد` sum. Grid:
+  `cancelMark()` next to the ملغي badge (💰؟ undecided with deposit, 💰 kept, ↩ refund).
+  Header: `kpi.cancel_pending` tile (undecided cancellations with money) that jumps to
+  the tab. CSV export carries the three columns.
+- **Prod state at build time**: 394 bookings / 29 ملغي, of which **2 carry an advance**
+  (SARAB-020 and SARAB-039, 300 ₪ each, both already ledger rows) — they show up as
+  «لم يُقرَّر» the moment this deploys; the owner decides from the tab.
+- **Test** `_vcancel.mjs` (port 8789, 49 checks — API arithmetic, states, sign rules,
+  un-cancel, fallback, summary; UI tab/chips/panel/decision/refund/details/drawer strip/
+  grid mark/finance tile/ledger filter). `_vpayments.mjs`, `_vfinance.mjs`, `_vevpay.mjs`
+  re-run clean. Gotcha: starting several `wrangler pages dev` at once collides on the
+  inspector port (9230) — pass distinct `--inspector-port`s or start them one by one.
+- **Remote migration** applied on backup `ops/db-backups/2026-09-03-pre-cancellations/`
+  (bookings 394 rows × 39 cols + payments 77 rows, JSON dumps) — diff-verified 394/394
+  rows, 0 pre-existing values changed, new columns all NULL. Gotcha: `d1 execute
+  --remote --file` now fails with `Authentication error [code: 10000]` on the D1
+  **import** endpoint for this login; `--command` (query endpoint) works — apply
+  multi-statement migrations one `--command` per statement.
+- Deploy `3699e349` verified: apex + www 200, `/office` and its API 302 to Access,
+  both Pages secrets intact. Screens: `docs/styleframes/office-cancellations*.png`,
+  `office-finance-cancellations.png`.
