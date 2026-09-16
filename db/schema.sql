@@ -47,7 +47,13 @@ CREATE TABLE IF NOT EXISTS bookings (
   -- to the advance, and why. A refund is a payments row (kind استرداد, negative amount).
   cancelled_at    TEXT,                -- تاريخ الإلغاء (auto-stamped when status turns ملغي)
   cancel_decision TEXT,                -- kept | refund | NULL = not decided yet
-  cancel_reason   TEXT                 -- سبب الإلغاء
+  cancel_reason   TEXT,                -- سبب الإلغاء
+  -- الوقت الإضافي (2026-09-16): time the client asked for on the spot, beyond the booked
+  -- hours, and what was charged for it. Kept apart from `price` (the agreed deal) so
+  -- overtime stays countable; total owed = price + COALESCE(extra_amount, 0).
+  extra_hours     REAL,                -- ساعات إضافية (0.5 allowed)
+  extra_amount    REAL,                -- رسوم الوقت الإضافي ₪
+  extra_note      TEXT                 -- ملاحظة الإضافي
 );
 CREATE INDEX IF NOT EXISTS idx_bookings_event_date ON bookings(event_date);
 CREATE INDEX IF NOT EXISTS idx_bookings_status     ON bookings(status);
@@ -71,7 +77,7 @@ CREATE TABLE IF NOT EXISTS event_finances (
   paid           REAL,   -- المدفوع
   worker1        REAL,   -- عامل 1
   worker2        REAL,   -- عامل 2
-  hours_cost     REAL,   -- ساعات
+  hours_cost     REAL,   -- ساعات — hours worked, INFO ONLY since 2026-09-16 (was summed as a cost)
   transport      REAL,   -- مواصلات
   printing       REAL,   -- طباعة صور
   other          REAL,   -- أخرى
@@ -81,6 +87,7 @@ CREATE TABLE IF NOT EXISTS event_finances (
   net_profit     REAL,   -- صافي الربح
   extra          TEXT,
   -- info-only fields (2026-08-27) — never counted in total_expenses/net_profit
+  -- (hours_cost joined them on 2026-09-16)
   photos_taken   REAL,   -- عدد الصور الملتقطة (غير المطبوعة)
   bank           REAL    -- BANK — ما حوّله المالك للبنك من هذه المناسبة
 );

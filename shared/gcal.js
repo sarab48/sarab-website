@@ -173,6 +173,9 @@ export function eventBody(row, env) {
     ? null : `${new Intl.NumberFormat('en-US').format(Number(v))} ₪`)
 
   const staffCount = Number(row.staff_count)
+  const xh = Number(row.extra_hours), xa = Number(row.extra_amount)
+  const extraTime = [Number.isFinite(xh) && xh ? `${xh} ساعة` : '', Number.isFinite(xa) && xa ? money(xa) : '']
+    .filter(Boolean).join(' · ') || null
   const lines = [
     ['رقم الحجز', trim(row.booking_no) || `#${row.id}`],
     ['العميل', [who, trim(row.phone)].filter(Boolean).join(' · ')],
@@ -182,6 +185,9 @@ export function eventBody(row, env) {
     ['الطاقم', [trim(row.staff), Number.isFinite(staffCount) && staffCount > 0 ? `(${staffCount} عمال)` : '']
       .filter(Boolean).join(' ')],
     ['السعر', money(row.price)],
+    // extra time charged on the spot (2026-09-16) — and the total it makes with the price
+    ['وقت إضافي', extraTime],
+    ['الإجمالي', extraTime && money(row.price) ? money(Number(row.price) + (Number(row.extra_amount) || 0)) : null],
     ['العربون', money(row.deposit)],
     ['المتبقي', money(row.remaining)],
     ['الحالة', trim(row.status)],

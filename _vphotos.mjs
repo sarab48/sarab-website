@@ -42,7 +42,7 @@ const cells = await page.$$eval('#finev tbody tr.frow', (trs) => {
 })
 const valuesShown = !!cells && cells.includes('600')
 const foot = await page.$$eval('#finev tfoot td', (tds) => tds.map((t) => t.textContent.trim()))
-const footSums = foot.length === 10 - 3 && foot.some((t) => t === '600' || t.includes('600'))
+const footSums = foot.length === 12 - 3 && foot.some((t) => t === '600' || t.includes('600'))
 await page.evaluate(() =>
   [...document.querySelectorAll('#finev tr.frow')].find((x) => x.textContent.includes('TEST-PB')).click())
 await page.waitForSelector('#finev tr.fedit')

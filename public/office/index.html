@@ -309,6 +309,8 @@
 
   /* الإلغاءات — a booking cancelled after paying: drawer strip, grid marker, tab detail */
   .field.cancel-only{background:rgba(201,123,106,.08); border-radius:8px; padding:.35rem .45rem}
+  .field.extra-time{background:rgba(212,175,55,.07); border-radius:8px; padding:.35rem .45rem}
+  .field.extra-time input[readonly]{font-weight:700; opacity:.9 !important}
   .cmark{font-size:.72rem; margin-inline-start:.25rem; white-space:nowrap}
   .cdet{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:1rem; padding:.7rem .4rem; white-space:normal}
   .cdet .col{display:grid; gap:.5rem; align-content:start}
@@ -815,7 +817,7 @@ const GRID_HEAD = $('#grid thead').innerHTML;
 
 const EVF = [['booking_no','رقم الحجز'],['event_date','تاريخ المناسبة','date'],['city','المدينة'],['client','العميل'],
   ['price','السعر الكامل','number'],['paid','المدفوع','number'],['worker1','عامل 1','number'],['worker2','عامل 2','number'],
-  ['hours_cost','ساعات','number'],['transport','مواصلات','number'],['printing','طباعة صور','number'],['other','أخرى','number'],
+  ['hours_cost','ساعات العمل (للمعلومات)','number'],['transport','مواصلات','number'],['printing','طباعة صور','number'],['other','أخرى','number'],
   ['tax_pct','نسبة الضريبة %','number'],['tax_value','قيمة الضريبة','number'],
   // للمعلومات فقط — لا يدخلان في المصاريف ولا في الصافي
   ['photos_taken','📷 عدد الصور الملتقطة','number'],['bank','BANK','number']];
@@ -936,7 +938,11 @@ async function loadPayLedger() {
 // per ledger payment (النوع — المبلغ — الطريقة), same records the booking drawer edits.
 function evPayHtml(e) {
   const ps = (e.booking_no && FIN.payByBooking && FIN.payByBooking[e.booking_no]) || [];
-  const head = `<b style="font-size:.8rem">💳 الدفعات المسجّلة${e.booking_no ? ' — ' + esc(e.booking_no) : ''}</b>`;
+  const xa = Number(e.extra_amount) || 0, xh = Number(e.extra_hours) || 0;
+  const head = `<b style="font-size:.8rem">💳 الدفعات المسجّلة${e.booking_no ? ' — ' + esc(e.booking_no) : ''}</b>`
+    + (xa || xh ? `<div class="evpay evextra"><span>⏱ <b>وقت إضافي</b> — ${xh ? `${xh} ساعة · ` : ''}<b class="pos">${money(xa)}</b>${
+        Number(e.booked_hours) ? ` — المحجوز ${e.booked_hours} س` : ''}</span><span class="muted" style="font-size:.74rem">الإجمالي ${
+        money((Number(e.price) || 0) + xa)} · يُعدَّل من نافذة الحجز</span></div>` : '');
   if (!ps.length) return `<div class="evpays">${head}
     <span class="muted" style="font-size:.78rem">${e.booking_no
       ? 'لا دفعات مسجّلة على هذا الحجز بعد — تُسجَّل من نافذة الحجز (زر «سجّل دفعة»)'
@@ -962,9 +968,12 @@ function renderFinance() {
   const od = (PAY && PAY.overdue) || [];
   // Same rule the server seeds a row with: a completed event has collected its price minus any
   // balance still outstanding; with no price recorded, fall back to the deposit we do know.
-  const collected = (m) => (m.price != null
-    ? Number(m.price) - (Number(m.remaining) || 0)
-    : Number(m.deposit) || 0);
+  // …where "price" means the total owed: السعر + الوقت الإضافي (2026-09-16).
+  const owedOf = (m) => (m.price != null ? Number(m.price) + (Number(m.extra_amount) || 0) : null);
+  const collected = (m) => { const t = owedOf(m); return t != null ? t - (Number(m.remaining) || 0) : Number(m.deposit) || 0; };
+  // A price cell: the agreed price, with the extra-time charge marked beside it.
+  const priceCell = (r) => money(r.price) + (Number(r.extra_amount)
+    ? ` <span class="muted" style="font-size:.72rem" title="وقت إضافي">+${money(r.extra_amount)}</span>` : '');
   const advIn = sumCol(adv, 'deposit');
   const advDue = sumCol(adv, 'remaining');
   // الإلغاءات: advances SARAB kept from cancelled bookings are income nothing else counts
@@ -984,25 +993,27 @@ function renderFinance() {
     ? `${thisYear}: <b>${yNow.n}</b> حجزاً · محصّل <b>${money(yNow.collected)}</b> من <b>${money(yNow.expected)}</b>`
     : years.length ? `${sumCol(years, 'n')} حجزاً مؤكداً · محصّل ${money(sumCol(years, 'collected'))}` : 'لا حجوزات مؤكدة بعد';
   const yearsBody = `<div class="tablebox" id="finyears"><table style="min-width:0">
-      <thead><tr><th>السنة</th><th>حجوزات مؤكدة</th><th>قادمة</th><th>إيرادات متوقعة</th><th>محصّل فعلياً</th><th>متبقٍ للتحصيل</th><th>عربون (منفصل)</th></tr></thead>
+      <thead><tr><th>السنة</th><th>حجوزات مؤكدة</th><th>قادمة</th><th>إيرادات متوقعة</th><th>⏱ منها وقت إضافي</th><th>محصّل فعلياً</th><th>متبقٍ للتحصيل</th><th>عربون (منفصل)</th></tr></thead>
       <tbody>${years.map((y) => `<tr>
         <td><b>${esc(y.k)}</b></td>
         <td class="num">${y.n}</td>
         <td class="num">${y.upcoming || '—'}</td>
         <td class="num">${money(y.expected)}</td>
+        <td class="num muted">${Number(y.extra) ? `${money(y.extra)} <span style="font-size:.7rem">(${y.extra_n})</span>` : '—'}</td>
         <td class="num pos">${money(y.collected)}</td>
         <td class="num${Number(y.due) > 0 ? ' neg' : ''}">${money(y.due)}</td>
         <td class="num muted">${y.dep_n ? `${y.dep_n} · ${money(y.dep_paid)}` : '—'}</td>
-      </tr>`).join('') || '<tr><td colspan="7"><div class="empty">لا حجوزات مؤكدة بعد</div></td></tr>'}</tbody>
+      </tr>`).join('') || '<tr><td colspan="8"><div class="empty">لا حجوزات مؤكدة بعد</div></td></tr>'}</tbody>
       ${years.length > 1 ? `<tfoot><tr><td>المجموع</td>
         <td class="num">${sumCol(years, 'n')}</td>
         <td class="num">${sumCol(years, 'upcoming')}</td>
         <td class="num">${money(sumCol(years, 'expected'))}</td>
+        <td class="num muted">${money(sumCol(years, 'extra'))}</td>
         <td class="num pos">${money(sumCol(years, 'collected'))}</td>
         <td class="num">${money(sumCol(years, 'due'))}</td>
         <td class="num muted">${sumCol(years, 'dep_n')} · ${money(sumCol(years, 'dep_paid'))}</td></tr></tfoot>` : ''}
     </table>
-    <div class="secnote">مؤكد / مكتمل فقط، حسب سنة المناسبة · «محصّل فعلياً» = السعر − المتبقي لكل حجز · دفع العربون معدود على حدة: العدد · المقبوض منه</div></div>`;
+    <div class="secnote">مؤكد / مكتمل فقط، حسب سنة المناسبة · الإيرادات المتوقعة = السعر + الوقت الإضافي لكل حجز · «محصّل فعلياً» = الإجمالي − المتبقي · دفع العربون معدود على حدة: العدد · المقبوض منه</div></div>`;
 
   // الأشهر: cash received, expenses, net and events held — per month, scoped by year chips.
   const bm = FIN.byMonth || [];
@@ -1063,7 +1074,9 @@ function renderFinance() {
   const box = $('#finance');
   box.innerHTML = `
     <section class="kpis" style="padding:0">
-      <div class="kpi"><b>${money(k.revenue)}</b><span>إيرادات متوقعة (أسعار الحجوزات)</span></div>
+      <div class="kpi"><b>${money(k.revenue)}</b><span>إيرادات متوقعة (أسعار الحجوزات + الوقت الإضافي)</span></div>
+      ${k.extra_n ? `<div class="kpi" id="finextra"><b>${money(k.extra_total)}</b><span>⏱ وقت إضافي — ${k.extra_n} مناسبة · ${k.extra_hours} ساعة${
+        Number(k.extra_year) !== Number(k.extra_total) ? ` · هذه السنة ${money(k.extra_year)}` : ''}</span></div>` : ''}
       <div class="kpi gold"><b>${money(received)}</b><span>محصّل فعلياً (مدفوعات + عرابين${can.kept ? ' + عرابين إلغاء محتفظ بها' : ''})</span></div>
       ${can.n ? `<div class="kpi" id="fincan" data-goto="cancellations" title="افتح تبويب الإلغاءات" style="cursor:pointer"><b>${money(can.kept)}</b><span>🚫 عرابين إلغاءات محتفظ بها${
         can.refunded ? ` · ↩ مسترد ${money(can.refunded)}` : ''}${can.pending_n ? ` · <b class="neg" style="display:inline;font-size:inherit">${can.pending_n}</b> بانتظار قرار (${money(can.pending)})` : ''}</span></div>` : ''}
@@ -1084,7 +1097,7 @@ function renderFinance() {
           <td><b>${esc(fullName(r))}</b></td>
           <td class="num">${esc(r.phone || '—')}</td>
           <td>${badge(r.status)}</td>
-          <td class="num">${money(r.price)}</td>
+          <td class="num">${priceCell(r)}</td>
           <td class="num neg"><b>${money(r.remaining)}</b></td>
         </tr>`).join('')}</tbody>
         <tfoot><tr><td colspan="6">المجموع (${od.length})</td>
@@ -1102,7 +1115,7 @@ function renderFinance() {
           <td><b>${esc(m.client || '—')}</b></td>
           <td>${esc(m.city || '—')}</td>
           <td class="num">${dmy(m.event_date)}</td>
-          <td class="num">${money(m.price)}</td>
+          <td class="num">${priceCell(m)}</td>
           <td class="num">${money(collected(m))}</td>
           <td><button class="btn btn--sm finadd" data-id="${m.id}">أضف للمالية</button></td>
         </tr>`).join('')}</tbody>
@@ -1125,13 +1138,13 @@ function renderFinance() {
         <td><b>${esc(r.client || '—')}</b></td>
         <td class="num">${dmy(r.event_date)}</td>
         <td>${esc(r.city || '—')}</td>
-        <td class="num">${money(r.price)}</td>
+        <td class="num">${priceCell(r)}</td>
         <td class="num pos">${money(r.deposit)}</td>
         <td class="num">${money(r.remaining)}</td>
         <td>${badge(r.status)}</td>
       </tr>`).join('') || '<tr><td colspan="8"><div class="empty">لا عرابين محصّلة من حجوزات قادمة بعد</div></td></tr>'}</tbody>
       ${adv.length ? `<tfoot><tr><td colspan="4">المجموع (${adv.length})</td>
-        <td class="num">${money(sumCol(adv, 'price'))}</td>
+        <td class="num">${money(sumCol(adv, 'total'))}</td>
         <td class="num pos">${money(advIn)}</td>
         <td class="num">${money(advDue)}</td><td></td></tr></tfoot>` : ''}
     </table>
@@ -1140,28 +1153,32 @@ function renderFinance() {
     ${sec('fin_ev', '📒 أرباح ومصاريف المناسبات',
       `${FIN.events.length} مناسبة · صافي <b class="${evNet >= 0 ? 'pos' : 'neg'}">${money(evNet)}</b>`,
       `<div class="tablebox" id="finev"><table>
-      <thead><tr><th>الرقم</th><th>العميل</th><th>المدينة</th><th>التاريخ</th><th>السعر</th><th>المدفوع</th><th>المصاريف</th><th>الصافي</th><th>📷 الصور</th><th>BANK</th></tr></thead>
+      <thead><tr><th>الرقم</th><th>العميل</th><th>المدينة</th><th>التاريخ</th><th>السعر</th><th>⏱ إضافي</th><th>المدفوع</th><th>المصاريف</th><th>الصافي</th><th>ساعات</th><th>📷 الصور</th><th>BANK</th></tr></thead>
       <tbody>${FIN.events.map((e) => `<tr class="frow" data-obj='${esc(JSON.stringify(e))}'>
         <td class="num muted">${esc(e.booking_no || '—')}</td>
         <td><b>${esc(e.client || '—')}</b></td>
         <td>${esc(e.city || '—')}</td>
         <td class="num">${dmy(e.event_date)}</td>
         <td class="num">${money(e.price)}</td>
+        <td class="num">${Number(e.extra_amount) ? money(e.extra_amount) : '—'}${Number(e.extra_hours) ? ` <span class="muted" style="font-size:.7rem">${e.extra_hours} س</span>` : ''}</td>
         <td class="num">${money(e.paid)}</td>
         <td class="num">${money(e.total_expenses)}</td>
         <td class="num ${(e.net_profit ?? 0) >= 0 ? 'pos' : 'neg'}">${money(e.net_profit)}</td>
+        <td class="num muted">${e.hours_cost ?? '—'}</td>
         <td class="num muted">${e.photos_taken ?? '—'}</td>
         <td class="num muted">${money(e.bank)}</td>
-      </tr>`).join('') || '<tr><td colspan="10"><div class="empty">لا سطور بعد</div></td></tr>'}</tbody>
+      </tr>`).join('') || '<tr><td colspan="12"><div class="empty">لا سطور بعد</div></td></tr>'}</tbody>
       ${FIN.events.length ? `<tfoot><tr><td colspan="4">المجموع (${FIN.events.length})</td>
         <td class="num">${money(sumCol(FIN.events, 'price'))}</td>
+        <td class="num">${money(sumCol(FIN.events, 'extra_amount'))}</td>
         <td class="num">${money(sumCol(FIN.events, 'paid'))}</td>
         <td class="num">${money(sumCol(FIN.events, 'total_expenses'))}</td>
         <td class="num ${evNet >= 0 ? 'pos' : 'neg'}">${money(evNet)}</td>
+        <td class="num muted">${sumCol(FIN.events, 'hours_cost') || '—'}</td>
         <td class="num muted">${sumCol(FIN.events, 'photos_taken') || '—'}</td>
         <td class="num muted">${money(sumCol(FIN.events, 'bank'))}</td></tr></tfoot>` : ''}
     </table>
-    <div class="addrow"><span class="muted" style="font-size:.8rem">اضغط على سطر للتعديل، والمصاريف والصافي (المدفوع − المصاريف) يُحسبان تلقائياً · 📷 الصور وBANK للمعلومات فقط — لا يدخلان في الحساب</span><button class="btn btn--sm fadd">+ إضافة مناسبة</button></div></div>`)}
+    <div class="addrow"><span class="muted" style="font-size:.8rem">اضغط على سطر للتعديل، والمصاريف والصافي (المدفوع − المصاريف) يُحسبان تلقائياً · ساعات العمل و📷 الصور وBANK للمعلومات فقط — لا تدخل في الحساب · ⏱ الوقت الإضافي يُسجَّل في نافذة الحجز</span><button class="btn btn--sm fadd">+ إضافة مناسبة</button></div></div>`)}
 
     ${sec('fin_gen', '🧾 المصاريف العامة',
       `${FIN.general.length} سطراً · المجموع <b class="neg">${money(sumCol(FIN.general, 'amount'))}</b>`,
@@ -1994,6 +2011,11 @@ const F = [
   ['start_time', 'وقت البداية'], ['end_time', 'وقت النهاية'],
   ['hours', 'عدد الساعات', 'number'], ['guests', 'عدد الضيوف'],
   ['price', 'السعر الكامل', 'number'], ['deposit', 'العربون المدفوع', 'number'],
+  // الوقت الإضافي (2026-09-16): time the client asked for on the spot and what it cost —
+  // recorded beside السعر, never folded into it. الإجمالي is computed (السعر + الإضافي)
+  // and المتبقي is measured against it. The cash itself is a دفعة in سجل المدفوعات.
+  ['extra_hours', '⏱ ساعات إضافية (طُلبت في المناسبة)', 'number'], ['extra_amount', 'رسوم الوقت الإضافي ₪', 'number'],
+  ['extra_note', 'ملاحظة الوقت الإضافي (اختياري)'], ['total_price', 'الإجمالي = السعر + الإضافي', 'ro'],
   ['remaining', 'المتبقي', 'number'], ['payment_status', 'حالة الدفع', 'select:payment_status'],
   ['lead_source', 'مصدر العميل', 'select:lead_source'], ['interest', 'مستوى الاهتمام', 'select:interest'],
   ['region', 'المنطقة', 'list:regions'],
@@ -2037,7 +2059,8 @@ function fieldHtml([key, label, kind]) {
   // القاعة grows a hint row under it: the chosen city's known halls as one-tap chips.
   const extra = key === 'venue' ? '<div class="vhint" id="venueHint"></div>' : '';
   const cancelCls = key.startsWith('cancel') ? ' cancel-only' : '';
-  return `<div class="field${full}${cancelCls}"><label for="f_${key}">${label}</label>${input}${extra}</div>`;
+  const extraCls = key.startsWith('extra_') || key === 'total_price' ? ' extra-time' : '';
+  return `<div class="field${full}${cancelCls}${extraCls}"><label for="f_${key}">${label}</label>${input}${extra}</div>`;
 }
 
 // Halls already used in the typed city (normalized like the server's cityMatch),
@@ -2127,10 +2150,8 @@ async function loadIntel() {
 
   if (match) $('#usePrice').onclick = () => {
     $('#f_price').value = match.price;
-    if (!state.remainTouched) {
-      const d = parseFloat($('#f_deposit').value) || 0;
-      $('#f_remaining').value = match.price - d;
-    }
+    // الإجمالي والمتبقي follow through the drawer's own rule (ledger-aware, manual edit wins)
+    $('#f_price').dispatchEvent(new Event('input'));
     toast('تم اعتماد السعر — لا تنسَ الحفظ');
   };
   if (canReply) $('#waReply').onclick = () => {
@@ -2357,13 +2378,23 @@ function openDrawer(id, presetDate) {
   // Once the booking has ledger payments, the ledger is the truer source: remaining
   // follows price − Σ المدفوعات, and editing العربون alone stops recomputing it
   // (an عربون beyond the ledger belongs in سجّل دفعة, not typed over the sum).
-  $('#f_remaining').addEventListener('input', () => state.remainTouched = true);
-  for (const k of ['price', 'deposit']) $('#f_' + k).addEventListener('input', () => {
-    if (state.remainTouched) return;
+  // What the client owes = السعر + رسوم الوقت الإضافي (2026-09-16) — الإجمالي shows it and
+  // المتبقي is measured against it, so an extra hour typed after the event reopens exactly
+  // its own amount until the دفعة for it is recorded.
+  const owed = () => {
     const p = parseFloat($('#f_price').value);
-    if (!Number.isFinite(p)) return;
-    if (state.payTotal != null) { if (k === 'price') $('#f_remaining').value = p - state.payTotal; return; }
-    $('#f_remaining').value = p - (parseFloat($('#f_deposit').value) || 0);
+    return Number.isFinite(p) ? p + (parseFloat($('#f_extra_amount').value) || 0) : NaN;
+  };
+  const syncTotal = () => { const t = owed(); $('#f_total_price').value = Number.isFinite(t) ? t : ''; };
+  syncTotal();
+  $('#f_remaining').addEventListener('input', () => state.remainTouched = true);
+  for (const k of ['price', 'deposit', 'extra_amount']) $('#f_' + k).addEventListener('input', () => {
+    syncTotal();
+    if (state.remainTouched) return;
+    const t = owed();
+    if (!Number.isFinite(t)) return;
+    if (state.payTotal != null) { if (k !== 'deposit') $('#f_remaining').value = t - state.payTotal; return; }
+    $('#f_remaining').value = t - (parseFloat($('#f_deposit').value) || 0);
   });
   // عدد العمال follows the names written in الطاقم (one per separator) — same idiom as
   // المتبقي following السعر − العربون: a manual edit of the count wins from then on.
@@ -2635,7 +2666,7 @@ $('#newBtn').onclick = () => openDrawer(null);
 $('#refreshBtn').onclick = () => Promise.all([loadMeta(), loadRows()]).then(() => toast('تم التحديث ✓'));
 $('#csvBtn').onclick = () => {
   const cols = ['booking_no','name','first_name','last_name','phone','event_date','occasion','city','client_city','region','venue',
-    'status','payment_status','price','deposit','remaining','staff','staff_count',
+    'status','payment_status','price','extra_hours','extra_amount','extra_note','deposit','remaining','staff','staff_count',
     'lead_source','interest','callback','notes','cancelled_at','cancel_decision','cancel_reason','source','lang','created_at'];
   const csv = [cols.join(',')]
     .concat(state.rows.map((r) => cols.map((c) => `"${String(r[c] ?? '').replace(/"/g, '""')}"`).join(',')))

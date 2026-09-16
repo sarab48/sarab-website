@@ -16,6 +16,7 @@
   Auth: ../_middleware.js.
 */
 import { nameSql } from '../../../shared/names.js'
+import { totalSql } from './bookings.js'
 
 const CONFIRMED = "('مؤكد','مكتمل')"
 const REAL = "('مؤكد','مكتمل','دفع العربون')"
@@ -40,7 +41,10 @@ export async function onRequestGet({ request, env }) {
   const isDep = `status = 'دفع العربون'`
   // What a booking actually collected: price − what it still owes; no price tracked →
   // the deposit is what we know arrived. Same rule as the finance tab's «محصّل».
-  const collected = `COALESCE(price - COALESCE(remaining, 0), COALESCE(deposit, 0))`
+  // Money owed = price + extra time charged on the spot (2026-09-16, bookings.js totalSql);
+  // avg_price below stays on the base price — that is what the city tiers are set against.
+  const TOTAL = totalSql()
+  const collected = `COALESCE(${TOTAL} - COALESCE(remaining, 0), COALESCE(deposit, 0))`
   const upcoming = "event_date >= date('now')"
   const noVal = (col) => `(${col} IS NULL OR TRIM(${col}) = '')`
   const [kpi, booked, deposit, years, months, made, collections, gaps,
@@ -50,7 +54,7 @@ export async function onRequestGet({ request, env }) {
       SUM(CASE WHEN ${isConf} THEN 1 ELSE 0 END) AS booked,
       SUM(CASE WHEN status = 'مكتمل' THEN 1 ELSE 0 END) AS done,
       SUM(CASE WHEN status = 'ملغي' THEN 1 ELSE 0 END) AS cancelled,
-      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue,
+      COALESCE(SUM(CASE WHEN ${isConf} THEN ${TOTAL} END), 0) AS revenue,
       COALESCE(AVG(CASE WHEN ${isConf} THEN price END), 0) AS avg_price
       FROM bookings WHERE 1=1 ${scope}`),
     // The headline: confirmed bookings in scope, split by whether the event already
@@ -58,21 +62,21 @@ export async function onRequestGet({ request, env }) {
     env.DB.prepare(`SELECT COUNT(*) AS total,
       SUM(CASE WHEN ${upcoming} THEN 1 ELSE 0 END) AS upcoming,
       SUM(CASE WHEN NOT ${upcoming} THEN 1 ELSE 0 END) AS held,
-      COALESCE(SUM(price), 0) AS revenue,
-      COALESCE(SUM(CASE WHEN ${upcoming} THEN price END), 0) AS upcoming_revenue,
+      COALESCE(SUM(${TOTAL}), 0) AS revenue,
+      COALESCE(SUM(CASE WHEN ${upcoming} THEN ${TOTAL} END), 0) AS upcoming_revenue,
       COALESCE(SUM(CASE WHEN ${upcoming} THEN remaining END), 0) AS outstanding
       FROM bookings WHERE ${isConf} AND event_date IS NOT NULL ${scope}`),
     // دفع العربون — held apart on the owner's rule: paid a deposit, not confirmed yet.
     env.DB.prepare(`SELECT COUNT(*) AS total,
       SUM(CASE WHEN ${upcoming} THEN 1 ELSE 0 END) AS upcoming,
-      COALESCE(SUM(price), 0) AS value,
+      COALESCE(SUM(${TOTAL}), 0) AS value,
       COALESCE(SUM(deposit), 0) AS collected
       FROM bookings WHERE ${isDep} AND event_date IS NOT NULL ${scope}`),
     env.DB.prepare(`SELECT substr(event_date, 1, 4) AS k,
       SUM(CASE WHEN ${isConf} THEN 1 ELSE 0 END) AS n,
       SUM(CASE WHEN ${isConf} AND ${upcoming} THEN 1 ELSE 0 END) AS upcoming,
       SUM(CASE WHEN ${isDep} THEN 1 ELSE 0 END) AS dep,
-      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue,
+      COALESCE(SUM(CASE WHEN ${isConf} THEN ${TOTAL} END), 0) AS revenue,
       COALESCE(SUM(CASE WHEN ${isConf} THEN ${collected} END), 0) AS collected,
       COALESCE(SUM(CASE WHEN ${isConf} THEN remaining END), 0) AS due
       FROM bookings WHERE status IN ${REAL} AND event_date IS NOT NULL AND length(event_date) >= 4
@@ -81,7 +85,7 @@ export async function onRequestGet({ request, env }) {
       SUM(CASE WHEN ${isConf} THEN 1 ELSE 0 END) AS n,
       SUM(CASE WHEN ${isConf} AND ${upcoming} THEN 1 ELSE 0 END) AS upcoming,
       SUM(CASE WHEN ${isDep} THEN 1 ELSE 0 END) AS dep,
-      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue,
+      COALESCE(SUM(CASE WHEN ${isConf} THEN ${TOTAL} END), 0) AS revenue,
       COALESCE(SUM(CASE WHEN ${isConf} THEN ${collected} END), 0) AS collected,
       COALESCE(SUM(CASE WHEN ${isConf} THEN remaining END), 0) AS due
       FROM bookings WHERE status IN ${REAL} AND event_date IS NOT NULL AND length(event_date) >= 7 ${yearScope}
@@ -96,7 +100,7 @@ export async function onRequestGet({ request, env }) {
     // للتحصيل: upcoming events still owing money — the call list. Confirmed and deposit
     // rows both listed (the status column keeps them apart), soonest first.
     env.DB.prepare(`SELECT id, booking_no, ${nameSql()} AS name, phone, event_date, city, status,
-      price, deposit, remaining
+      price, extra_amount, ${TOTAL} AS total, deposit, remaining
       FROM bookings
       WHERE status IN ${REAL} AND ${upcoming} AND COALESCE(remaining, 0) > 0 ${scope}
       ORDER BY event_date ASC, id ASC LIMIT 100`),
@@ -117,13 +121,13 @@ export async function onRequestGet({ request, env }) {
     env.DB.prepare(`SELECT ${gk('city')} AS k,
       COUNT(*) AS clients,
       SUM(CASE WHEN ${isConf} THEN 1 ELSE 0 END) AS booked,
-      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue
+      COALESCE(SUM(CASE WHEN ${isConf} THEN ${TOTAL} END), 0) AS revenue
       FROM bookings WHERE status != 'ملغي' ${scope}
       GROUP BY k ORDER BY clients DESC, booked DESC, k`),
     env.DB.prepare(`SELECT ${gk('occasion')} AS k,
       COUNT(*) AS clients,
       SUM(CASE WHEN ${isConf} THEN 1 ELSE 0 END) AS booked,
-      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue
+      COALESCE(SUM(CASE WHEN ${isConf} THEN ${TOTAL} END), 0) AS revenue
       FROM bookings WHERE status != 'ملغي' ${scope}
       GROUP BY k ORDER BY booked DESC, clients DESC, k`),
     env.DB.prepare(`SELECT ${gk('lead_source')} AS k,
@@ -142,7 +146,7 @@ export async function onRequestGet({ request, env }) {
     env.DB.prepare(`SELECT ${gk('city')} AS k, ${gk('lead_source')} AS src,
       COUNT(*) AS clients,
       SUM(CASE WHEN ${isConf} THEN 1 ELSE 0 END) AS booked,
-      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue
+      COALESCE(SUM(CASE WHEN ${isConf} THEN ${TOTAL} END), 0) AS revenue
       FROM bookings WHERE status != 'ملغي' ${scope}
       GROUP BY k, src ORDER BY k, clients DESC, src`),
     // مدينة العميل (السكن) — hand-filled since 2026-08-24, so only rows that carry it;
@@ -150,7 +154,7 @@ export async function onRequestGet({ request, env }) {
     env.DB.prepare(`SELECT TRIM(client_city) AS k,
       COUNT(*) AS clients,
       SUM(CASE WHEN ${isConf} THEN 1 ELSE 0 END) AS booked,
-      COALESCE(SUM(CASE WHEN ${isConf} THEN price END), 0) AS revenue
+      COALESCE(SUM(CASE WHEN ${isConf} THEN ${TOTAL} END), 0) AS revenue
       FROM bookings WHERE status != 'ملغي' AND client_city IS NOT NULL AND TRIM(client_city) != '' ${scope}
       GROUP BY k ORDER BY clients DESC, booked DESC, k`),
   ])

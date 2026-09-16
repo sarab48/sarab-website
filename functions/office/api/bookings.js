@@ -13,6 +13,7 @@ const WRITABLE = [
   'package', 'price', 'deposit', 'remaining', 'payment_status', 'arrival_time',
   'staff', 'staff_count', 'lead_source', 'interest', 'callback', 'notes', 'status',
   'cancelled_at', 'cancel_decision', 'cancel_reason',
+  'extra_hours', 'extra_amount', 'extra_note',
 ]
 
 // Statuses that mean "actually booked" — reaching one of them stamps booked_at.
@@ -24,7 +25,12 @@ export const CANCELLED = 'ملغي'
 // What happens to the advance after a cancellation: kept by SARAB, or refunded to the
 // client (the refund itself is a ledger row — payments.js kind استرداد). NULL = undecided.
 export const CANCEL_DECISIONS = ['kept', 'refund']
-const NUMERIC = new Set(['hours', 'price', 'deposit', 'remaining', 'staff_count'])
+const NUMERIC = new Set(['hours', 'price', 'deposit', 'remaining', 'staff_count', 'extra_hours', 'extra_amount'])
+
+// What the client owes in total (2026-09-16): the agreed price plus whatever was charged
+// on the spot for extra time. NULL when no price is tracked — exactly like `price` was —
+// so every COALESCE(... , deposit) fallback keeps working. `p` prefixes a table alias.
+export const totalSql = (p = '') => `(${p}price + COALESCE(${p}extra_amount, 0))`
 
 export function cleanValue(key, v) {
   if (v === undefined) return undefined
@@ -83,21 +89,29 @@ export async function ensureEventFinance(env, row) {
   if (existing) return
   const price = Number(row.price)
   const priceVal = Number.isFinite(price) ? price : null
+  const extra = Number(row.extra_amount)
+  const total = priceVal != null ? priceVal + (Number.isFinite(extra) ? extra : 0) : null
   const remaining = Number(row.remaining)   // unrecorded → 0 (nothing left outstanding)
   const deposit = Number(row.deposit)
-  // Collected so far: for a completed event, the price minus any balance still outstanding
-  // (so a fully-paid event seeds paid = price); if the price itself isn't recorded, fall
-  // back to the deposit we do know about.
-  const paid = priceVal != null
-    ? priceVal - (Number.isFinite(remaining) ? remaining : 0)
+  // Collected so far: for a completed event, the total owed (price + extra time) minus any
+  // balance still outstanding (so a fully-paid event seeds paid = total); if the price
+  // itself isn't recorded, fall back to the deposit we do know about. The row's own
+  // `price` stays the agreed base price — the extra is read from the booking.
+  const paid = total != null
+    ? total - (Number.isFinite(remaining) ? remaining : 0)
     : Number.isFinite(deposit) ? deposit : null
+  // «ساعات» is the owner's info field (hours worked, never a cost since 2026-09-16) —
+  // prefilled as booked + extra hours when the booking knows either.
+  const hrs = Number(row.hours), xh = Number(row.extra_hours)
+  const hoursWorked = Number.isFinite(hrs) || Number.isFinite(xh)
+    ? (Number.isFinite(hrs) ? hrs : 0) + (Number.isFinite(xh) ? xh : 0) : null
   // net_profit seeds from what was actually received (paid), matching the finance rule.
   await env.DB.prepare(
     `INSERT INTO event_finances
-       (booking_no, event_date, city, client, price, paid, total_expenses, net_profit)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7)`
+       (booking_no, event_date, city, client, price, paid, hours_cost, total_expenses, net_profit)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8)`
   ).bind(row.booking_no, row.event_date || null, row.city || null, displayName(row) || null,
-    priceVal, paid, paid ?? 0).run()
+    priceVal, paid, hoursWorked, paid ?? 0).run()
 }
 
 // When the owner books a client in a city the price list doesn't know yet, remember it:

@@ -6,12 +6,14 @@
   actually received, not the demanded price).
   Auth: ../_middleware.js.
 */
-import { ensureBookingNo, ensureEventFinance } from './bookings.js'
+import { ensureBookingNo, ensureEventFinance, totalSql } from './bookings.js'
 import { cancellationRows, cancellationSummary } from './cancellations.js'
 import { nameSql } from '../../../shared/names.js'
 
 // photos_taken + bank are the owner's info-only fields — accepted and stored, but
 // deliberately absent from COSTS so they never move total_expenses or net_profit.
+// hours_cost («ساعات») joined them on 2026-09-16: every row held the hours WORKED
+// (2/3/4), which had been summed as a ₪2–4 expense — it is a count, not a cost.
 const EV_FIELDS = ['booking_no', 'event_date', 'city', 'client', 'price', 'paid', 'worker1',
   'worker2', 'hours_cost', 'transport', 'printing', 'other', 'tax_pct', 'tax_value',
   'photos_taken', 'bank']
@@ -19,7 +21,7 @@ const EV_NUM = new Set(['price', 'paid', 'worker1', 'worker2', 'hours_cost', 'tr
   'printing', 'other', 'tax_pct', 'tax_value', 'photos_taken', 'bank'])
 const GEN_FIELDS = ['date', 'category', 'description', 'amount', 'method', 'notes']
 const GEN_NUM = new Set(['amount'])
-const COSTS = ['worker1', 'worker2', 'hours_cost', 'transport', 'printing', 'other', 'tax_value']
+const COSTS = ['worker1', 'worker2', 'transport', 'printing', 'other', 'tax_value']
 
 const bad = (error, status = 400) => Response.json({ ok: false, error }, { status })
 
@@ -30,10 +32,14 @@ const val = (k, v, nums) => {
   return String(v).trim().slice(0, 300) || null
 }
 
-// collected per booking, in SQL: what its price minus what it still owes; with no
-// price tracked, the deposit is what we know arrived. Same rule the tab's «محصّل»
-// column and the payments backfill used — the three can never disagree.
-const COLLECTED = `COALESCE(price - COALESCE(remaining, 0), COALESCE(deposit, 0))`
+// What a booking owes in total: price + extra time charged on the spot (2026-09-16).
+const TOTAL = totalSql()
+// collected per booking, in SQL: its total minus what it still owes; with no price
+// tracked, the deposit is what we know arrived. Same rule the tab's «محصّل» column
+// and the payments backfill used — the three can never disagree.
+const COLLECTED = `COALESCE(${TOTAL} - COALESCE(remaining, 0), COALESCE(deposit, 0))`
+// A booking that had extra time: hours or money recorded for it.
+const HAS_EXTRA = `(COALESCE(extra_amount, 0) != 0 OR COALESCE(extra_hours, 0) != 0)`
 
 async function payload(env) {
   const [ev, gen, kpi, adv, miss, byYear, mPay, mEvExp, mGenExp, mEvents, mExpected, evPay] = await env.DB.batch([
@@ -41,22 +47,31 @@ async function payload(env) {
     // first+last wins over whatever the row was seeded with — WhatsApp-profile names
     // stop showing the moment the owner names the client on the booking itself. The
     // stored client is only touched when the owner edits the row, never rewritten here.
+    // The booking's extra time (hours + ₪) rides along read-only: the row's own price is
+    // the agreed base price, the extra is recorded once, on the booking, and shown here.
     env.DB.prepare(`SELECT f.*, COALESCE(NULLIF(TRIM(COALESCE(b.first_name, '') || ' ' ||
-                             COALESCE(b.last_name, '')), ''), f.client, b.name) AS client_display
+                             COALESCE(b.last_name, '')), ''), f.client, b.name) AS client_display,
+                           b.extra_hours, b.extra_amount, b.hours AS booked_hours
                     FROM event_finances f
                     LEFT JOIN bookings b ON b.booking_no = f.booking_no
                     ORDER BY (f.event_date IS NULL), f.event_date DESC, f.id DESC`),
     env.DB.prepare('SELECT * FROM general_expenses ORDER BY (date IS NULL), date DESC, id DESC'),
     env.DB.prepare(`SELECT
-      (SELECT COALESCE(SUM(price),0)   FROM bookings WHERE status IN ('مؤكد','دفع العربون','مكتمل')) AS revenue,
+      (SELECT COALESCE(SUM(${TOTAL}),0) FROM bookings WHERE status IN ('مؤكد','دفع العربون','مكتمل')) AS revenue,
       (SELECT COALESCE(SUM(deposit),0) FROM bookings WHERE status IN ('مؤكد','دفع العربون','مكتمل')) AS collected,
+      (SELECT COALESCE(SUM(extra_amount),0) FROM bookings WHERE status IN ('مؤكد','دفع العربون','مكتمل')) AS extra_total,
+      (SELECT COALESCE(SUM(extra_hours),0)  FROM bookings WHERE status IN ('مؤكد','دفع العربون','مكتمل')) AS extra_hours,
+      (SELECT COUNT(*) FROM bookings WHERE status IN ('مؤكد','دفع العربون','مكتمل') AND ${HAS_EXTRA}) AS extra_n,
+      (SELECT COALESCE(SUM(extra_amount),0) FROM bookings WHERE status IN ('مؤكد','دفع العربون','مكتمل')
+         AND substr(event_date, 1, 4) = strftime('%Y', 'now')) AS extra_year,
       (SELECT COALESCE(SUM(paid),0)    FROM event_finances) AS ev_paid,
       (SELECT COALESCE(SUM(total_expenses),0) FROM event_finances) AS ev_expenses,
       (SELECT COALESCE(SUM(amount),0)  FROM general_expenses) AS gen_expenses`),
     // Advances (عربون) already collected on confirmed bookings that haven't happened yet —
     // cash in hand. Listed on its own so the owner sees collected vs. still-to-collect,
     // separate from the completed-events P&L (which handles done events).
-    env.DB.prepare(`SELECT booking_no, event_date, city, ${nameSql()} AS client, price, deposit, remaining, status
+    env.DB.prepare(`SELECT booking_no, event_date, city, ${nameSql()} AS client, price, extra_amount,
+                           ${TOTAL} AS total, deposit, remaining, status
                     FROM bookings
                     WHERE status IN ('مؤكد','دفع العربون') AND COALESCE(deposit, 0) > 0
                     ORDER BY (event_date IS NULL), event_date ASC, id ASC`),
@@ -65,7 +80,7 @@ async function payload(env) {
     // calculating without. A booking with no booking_no can't match a finance row at all,
     // hence the NULL-safe comparison. Surfaced in the tab with a one-click add.
     env.DB.prepare(`SELECT b.id, b.booking_no, b.event_date, b.city, ${nameSql('b.')} AS client,
-                           b.price, b.deposit, b.remaining
+                           b.price, b.extra_amount, ${totalSql('b.')} AS total, b.deposit, b.remaining
                     FROM bookings b
                     WHERE b.status = 'مكتمل'
                       AND NOT EXISTS (SELECT 1 FROM event_finances f
@@ -78,9 +93,11 @@ async function payload(env) {
     env.DB.prepare(`SELECT substr(event_date, 1, 4) AS k,
       SUM(CASE WHEN status IN ('مؤكد','مكتمل') THEN 1 ELSE 0 END) AS n,
       SUM(CASE WHEN status IN ('مؤكد','مكتمل') AND event_date >= date('now') THEN 1 ELSE 0 END) AS upcoming,
-      COALESCE(SUM(CASE WHEN status IN ('مؤكد','مكتمل') THEN price END), 0) AS expected,
+      COALESCE(SUM(CASE WHEN status IN ('مؤكد','مكتمل') THEN ${TOTAL} END), 0) AS expected,
       COALESCE(SUM(CASE WHEN status IN ('مؤكد','مكتمل') THEN ${COLLECTED} END), 0) AS collected,
       COALESCE(SUM(CASE WHEN status IN ('مؤكد','مكتمل') THEN remaining END), 0) AS due,
+      COALESCE(SUM(CASE WHEN status IN ('مؤكد','مكتمل') THEN extra_amount END), 0) AS extra,
+      SUM(CASE WHEN status IN ('مؤكد','مكتمل') AND ${HAS_EXTRA} THEN 1 ELSE 0 END) AS extra_n,
       SUM(CASE WHEN status = 'دفع العربون' THEN 1 ELSE 0 END) AS dep_n,
       COALESCE(SUM(CASE WHEN status = 'دفع العربون' THEN deposit END), 0) AS dep_paid
       FROM bookings
@@ -103,7 +120,7 @@ async function payload(env) {
                     WHERE status IN ('مؤكد','مكتمل')
                       AND event_date IS NOT NULL AND length(event_date) >= 7
                     GROUP BY k`),
-    env.DB.prepare(`SELECT substr(event_date, 1, 7) AS k, COALESCE(SUM(price), 0) AS v
+    env.DB.prepare(`SELECT substr(event_date, 1, 7) AS k, COALESCE(SUM(${TOTAL}), 0) AS v
                     FROM bookings
                     WHERE status IN ('مؤكد','مكتمل')
                       AND event_date IS NOT NULL AND length(event_date) >= 7

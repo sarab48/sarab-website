@@ -35,11 +35,15 @@
   the event's P&L paid. Recording one on a cancelled booking that has no decision yet
   marks its cancel_decision = 'refund' (bookings.js) — a refund IS the decision.
 
+  Extra time (2026-09-16): what the client owes is price + extra_amount (bookings.js
+  totalSql) — the derived-remaining branch below uses it; a payment for the extra hour
+  is an ordinary دفعة, the charge itself lives on the booking.
+
   A payment that carries an issued receipt (doc_number, future Invoice4U automation)
   can no longer be deleted or change amount/kind — a real tax document has to be
   undone with a credit note, not a row delete. Auth: ../_middleware.js.
 */
-import { CANCELLED } from './bookings.js'
+import { CANCELLED, totalSql } from './bookings.js'
 
 const bad = (error, status = 400) => Response.json({ ok: false, error }, { status })
 
@@ -72,7 +76,7 @@ async function applyDelta(env, bookingId, dAmount, dDeposit) {
        deposit = CASE WHEN ?1 != 0 THEN COALESCE(deposit, 0) + ?1 ELSE deposit END,
        remaining = CASE
          WHEN remaining IS NOT NULL THEN remaining - ?2
-         WHEN price IS NOT NULL THEN price - (SELECT COALESCE(SUM(amount), 0) FROM payments
+         WHEN price IS NOT NULL THEN ${totalSql()} - (SELECT COALESCE(SUM(amount), 0) FROM payments
                                               WHERE booking_id = ?3 AND COALESCE(kind, '') != 'إكرامية')
          ELSE NULL END
      WHERE id = ?3`
@@ -139,7 +143,7 @@ async function globalPayload(env, f = {}) {
     // Events that already happened and still owe money — nowhere else surfaces these
     // (the advances table and the التحليلات call list only look forward).
     env.DB.prepare(`SELECT id, booking_no, name, first_name, last_name, phone, city,
-                           event_date, status, price, deposit, remaining
+                           event_date, status, price, extra_amount, ${totalSql()} AS total, deposit, remaining
                     FROM bookings
                     WHERE status IN ('مؤكد','دفع العربون','مكتمل')
                       AND COALESCE(remaining, 0) > 0

@@ -1081,3 +1081,71 @@ all recorded; refunds calculated in the finance section").**
 - Deploy `3699e349` verified: apex + www 200, `/office` and its API 302 to Access,
   both Pages secrets intact. Screens: `docs/styleframes/office-cancellations*.png`,
   `office-finance-cancellations.png`.
+
+**2026-09-16 — الوقت الإضافي: extra time charged on the spot (owner request: "clients
+ask us to stay additional time, we charge extra on the spot — SARAB-064 was 200 ₪. How
+best to record it: a specific box, or write it into the full amount?").**
+
+- **Decision.** A dedicated box, never the full amount. Two things happen on the day and
+  they belong in two places: the *charge* is a change to the deal → recorded on the
+  booking beside the agreed price; the *cash* is a payment → an ordinary دفعة in سجل
+  المدفوعات, as before. Folding the 200 into السعر would lose the fact for good (how often
+  clients extend, what overtime earns, the true base price behind the city tiers). A new
+  payment *kind* would not work either: a 200 «extra» payment without a raised price drives
+  المتبقي to −200. Time is recorded as **extra hours**, not by editing وقت النهاية — the
+  booked hours/end time stay the agreed plan (the calendar event is built from them);
+  extra hours is what actually happened.
+- **Model** (`db/migrations/2026-09-16-extra-time.sql`, additive): `bookings.extra_hours`
+  (REAL, 0.5 allowed), `extra_amount` (₪), `extra_note`. **Total owed = price +
+  COALESCE(extra_amount, 0)** — `totalSql(prefix)` exported from `bookings.js` (NULL when
+  price is NULL, exactly like `price` was, so every `COALESCE(…, deposit)` fallback still
+  works). Every sum that read `price` now reads the total: finance `kpi.revenue`,
+  `COLLECTED`, السنوات `expected`/`collected` (+ new `extra`, `extra_n` per year), الأشهر
+  `expected`, advances/missing rows (`total` + `extra_amount`); payments' derived-remaining
+  branch (NULL remaining → total − Σ ledger) and المتأخرات rows; insights — every `revenue`
+  / `upcoming_revenue` / `value` sum (`avg_price` deliberately stays on the base price:
+  that is what the city tiers are set against). New finance KPIs `extra_total`,
+  `extra_hours`, `extra_n`, `extra_year` (real statuses only). `cleanValue` + both WRITABLE
+  lists accept the three fields; the drawer's CSV carries them.
+- **المتبقي rule** (unchanged pattern): the API never moves `remaining` on a price/extra
+  edit — the drawer recomputes it client-side against the *total* (ledger-aware:
+  total − Σ payments once payments exist, else total − العربون; a hand edit wins) and sends
+  it with the save. So typing an extra hour after a fully-paid event reopens exactly its
+  amount until the دفعة for it is recorded; recording the payment first then adding the
+  extra lands on 0 too (order doesn't matter). «اعتماد السعر» now dispatches the same
+  input rule instead of its own arithmetic.
+- **«ساعات» on the P&L row is information, not a cost.** Every row held the hours WORKED
+  (2/3/4) while `hours_cost` sat in `COSTS` — a fake ₪2–4 expense per event. Dropped from
+  `COSTS`; the migration recomputes `total_expenses`/`net_profit` for all rows; the label
+  reads «ساعات العمل (للمعلومات)». `ensureEventFinance` now seeds `paid = total −
+  remaining` and `hours_cost = hours + extra_hours` (when either is known). The events
+  payload joins `b.extra_hours, b.extra_amount, b.hours AS booked_hours` read-only — the
+  row's own `price` stays the base price, the extra is recorded once, on the booking.
+- **Dashboard.** Drawer: a gold-tinted `.extra-time` strip after السعر/العربون — ⏱ ساعات
+  إضافية · رسوم الوقت الإضافي ₪ · ملاحظة · **الإجمالي** (read-only, computed). Finance:
+  ⏱ tile `#finextra` (Σ · N events · Σ hours · this year), السنوات gains «⏱ منها وقت
+  إضافي» (8 cols), the P&L table gains «⏱ إضافي» (amount + hours) and «ساعات» (12 cols,
+  tfoot sums), the expanded row opens with a `.evextra` line (hours · ₪ · booked · total),
+  price cells in المتأخرات / غير مُدرجة / عرابين show `+200 ₪` beside the price
+  (`priceCell`), the advances tfoot sums `total`. Calendar description gains «وقت إضافي»
+  and «الإجمالي» lines when present (`shared/gcal.js`).
+- **Test** `_vextra.mjs` (port 8788, 26 checks: fields on POST/PATCH + numeric cleaning,
+  advances/overdue `total`, KPIs, year/month expected, insights revenue delta = total,
+  payment clears, P&L seed (paid/price/ساعات/join), hours not a cost, NULL-remaining
+  derivation from total, total = price when no extra; UI strip + الإجمالي + recalc +
+  manual-wins, tile, column counts, row/expanded/price cells, years cell). Re-run clean:
+  `_vpayments`, `_vcancel`, `_vevpay`, `_vinsights`, `_vdeposit`, `_vmonth`; `_vphotos`
+  updated for the 12-column tfoot. `_vfinance.mjs` has one stale check («lead starts with
+  no رقم حجز») failing since `9c7ce70` numbered leads at creation — unrelated, left as is.
+- **Data.** SARAB-064 (2026-09-12, price 1800, paid 300 + 1500): the owner confirmed the
+  200 was *not* yet in the records, so the migration script records `extra_hours = 1,
+  extra_amount = 200` and reopens `remaining` 0 → 200; the 200 cash itself is for the owner
+  to log as a دفعة from the drawer (the event sits in المتأخرات until then). P&L row 26
+  keeps its typed 4 hours (3 + 1). Backup `ops/db-backups/2026-09-16-pre-extra-time/`
+  (bookings 413 × 42, event_finances 25, payments 81).
+- **Remote migration + deploy: PENDING owner go.** The auto-mode classifier blocked
+  `d1 execute --remote` this session (even a single `ALTER TABLE … ADD COLUMN`). Everything
+  is in `ops/migrate-2026-09-16-extra-time.sh` (idempotent: adds the columns, recomputes
+  P&L totals, records SARAB-064, diff-verifies every pre-existing value against the
+  backup); then `npm run build && npx wrangler pages deploy dist`. Deploy the code only
+  AFTER the migration — the functions select the new columns.

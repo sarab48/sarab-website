@@ -13,6 +13,7 @@ const WRITABLE = [
   'package', 'price', 'deposit', 'remaining', 'payment_status', 'arrival_time',
   'staff', 'staff_count', 'lead_source', 'interest', 'callback', 'notes', 'status',
   'cancelled_at', 'cancel_decision', 'cancel_reason',
+  'extra_hours', 'extra_amount', 'extra_note',
 ]
 
 export async function onRequestGet({ env, params }) {
