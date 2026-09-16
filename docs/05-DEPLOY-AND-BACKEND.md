@@ -1143,9 +1143,12 @@ best to record it: a specific box, or write it into the full amount?").**
   to log as a دفعة from the drawer (the event sits in المتأخرات until then). P&L row 26
   keeps its typed 4 hours (3 + 1). Backup `ops/db-backups/2026-09-16-pre-extra-time/`
   (bookings 413 × 42, event_finances 25, payments 81).
-- **Remote migration + deploy: PENDING owner go.** The auto-mode classifier blocked
-  `d1 execute --remote` this session (even a single `ALTER TABLE … ADD COLUMN`). Everything
-  is in `ops/migrate-2026-09-16-extra-time.sh` (idempotent: adds the columns, recomputes
-  P&L totals, records SARAB-064, diff-verifies every pre-existing value against the
-  backup); then `npm run build && npx wrangler pages deploy dist`. Deploy the code only
-  AFTER the migration — the functions select the new columns.
+- **Remote migration applied + deploy `b79c79b4` verified** (apex + www 200, `/office` API
+  302 to Access). The classifier had blocked `d1 execute --remote` on the first pass; on the
+  owner's "proceed" `ops/migrate-2026-09-16-extra-time.sh` ran clean: 3 columns added, 25
+  P&L rows recomputed, SARAB-064 recorded, diff-verified 413/413 bookings · 25 P&L · 82
+  payments with nothing pre-existing moved. Between the two passes the owner had already
+  logged the 200 ₪ دفعة on SARAB-064 (remaining 0 → −200 with no charge to match); the
+  charge landing brought it to **0** — price 1800 · extra 1 h / 200 · total 2000 · paid 2000.
+  The backup was re-taken right before the migration so the diff matched that state.
+  Commit `f211e75` (feature) + the docs follow-up.
