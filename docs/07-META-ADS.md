@@ -48,6 +48,34 @@ parked; revisit only with Hebrew-native creative.
 Ad set SARAB-Arabic-Views&Lookalike (IG/FB engagers 365d + 50% viewers 180d).
 Spend ₪97 · 2 convos. Barely tested.
 
+### Campaign: SARAB-Prospecting-Arabic-Central-9.2026 — `120250547562060256` (ACTIVE, live since 2026-08-27 ~11:15 local)
+Ad set `120250547563820256` ₪100/d, CONVERSATIONS→WhatsApp, Highest volume, age 18–65
+(owner's draft widened 22→18), Advantage audience ON (geo only). **Published geo = 20 city
+keys** (owner's draft replaced the API pins): Wadi Ara — Umm el Fahm, `Ara, `Ar`ara, Baqa
+al-Gharbiyye, Jatt, Kafr Qara, Barta`a, Musmus, Mu'awiya, Zalafa; Triangle — Tayibe, Tira,
+Qalansuwa, Kafr Qasim, Kafr Bara, Jaljulya, Yamma; Central — Lod, Ramla, Jaffa. Excluded:
+PS, Jerusalem, Ashdod, Rahat. **Zero overlap with the North ad set** (verified against its
+targeting — the North had no Wadi Ara town), so the whole audience is genuinely new.
+Placements = all (Advantage+), fb+ig, mobile+desktop.
+
+| As of 2026-09-04 (9 days, day 9 partial) | Campaign | reel1-CT `…720340256` | WOW-CT `…704800256` |
+|---|---|---|---|
+| Spend | ₪936 | ₪257 (28%) | ₪679 (72%) |
+| Conversations / CPR | 25 / ₪37.46 | 7 / ₪36.78 | 18 / ₪37.72 |
+| CTR · CPM · link clicks | 1.44% · ₪33.73 · 157 | 1.76% · ₪31.74 · 60 | 1.31% · ₪34.55 · 97 |
+| Link click → conversation | 15.9% | 11.7% | 18.6% |
+| Video p100 / impressions | — | 3.1% (North reel1: 5.2%) | 7.7% (North WOW: 10.8%) |
+| Reach / frequency | 11,935 / 2.33 | 4,914 / 1.65 | 10,238 / 1.92 |
+| D1 rows (lead_source) | 21 | 8 (0 booked, 3 quotes ₪7,900, 5 inq.) | 13 (**3 booked**, 2 quotes, 8 inq.) |
+
+Same-age comparison (first 9 days): North reel1 ₪4.42 CPR / CTR 2.79% / CPM ₪21.85;
+North WOW ₪23.42 / 2.80% / ₪26.06. Central is 1.6× WOW-North's launch and ~8× reel1-North's.
+Region split of spend: Haifa district (Wadi Ara) 64% · Central district 35% · Tel Aviv 2%.
+Placement: IG stories 38% (CPR ₪39.5, 80% of all link clicks), IG reels 29% (₪30.3),
+**IG feed 20% (₪93, CTR 0.71%, CPM ₪44 — worst, as in the North where IG feed was ₪37)**,
+FB feed 9% (₪21.2, CTR 2.74% — best; the North gave FB feed 31% of spend, Central only 9%).
+Age/gender: women 88% of spend; 18–24 = 25% of spend at CPR ₪34 (average, not a leak).
+
 ### Notable ad-level signal
 `reel3-Wadea zyane` (`120247017198050256`, paused Jun): ₪158 spend, **22 convos,
 CPR ₪7.18, CTR 6.23%** — tiny sample but by far the best CPR ever seen in the
@@ -207,6 +235,316 @@ totals will improve somewhat as quotes convert.
   changed. Owner's remaining pre-publish queue: IG identity on both ads, music check,
   optional covers, optional AI-disclosure, then publish (applies the city-list draft).
 
+- **2026-08-30 — Central welcome-message investigation (FINAL, owner proven right)**:
+  Central-ad WhatsApp chats show NO welcome message while old-ad chats DO. Wrong turns
+  first, for the record: an initial "it's invisible by design" answer, then a
+  "coexistence (Jul 23) stopped materialization" theory built on D1 rates (96% of
+  pre-Jul-23 ad leads had an auto thread-start entry vs 2% after — the `type='errors'`
+  131051 rows in synced history). Owner refuted it with dated screenshots that MATCH D1
+  rows to the minute: old **reel1-North** chat 2026-08-26 (number redacted, pre-fill 05:07Z,
+  owner replies 05:32/05:33Z) and old **WOW-North** chat 2026-08-23 (number redacted,
+  pre-fill 09:36Z) — both with a materialized per-ad "Automated greeting" bubble (reel1 =
+  generic thanks; WOW = details-ask), both post-coexistence. **Conclusion: old-ad
+  welcomes still materialize today; the 96%→2% delta was a measurement artifact —
+  materialized welcomes NEVER echo through the Cloud-API webhook, so live D1 is blind to
+  them (pre-Jul-23 ones were visible only via the one-time phone history sync).**
+  So the real difference IS old ads vs the new Central ads (owner's original claim):
+  same number, but old ads (built in Ads Manager Jun 7 / Jul 22, templates set at
+  creation, pre-API-registration) materialize a real both-sides "Automated greeting",
+  while the Central ads (built via Marketing API Aug 25–26, template added in Ads
+  Manager afterwards, post-API-registration) only render the welcome as an ephemeral
+  client-side preview (owner's own ad-click test shows it displaying + the "secure
+  service from Meta" chat banner, which old-ad chats don't have — they show the
+  data-sharing notice instead). API comparison of all 4 creatives shows no readable
+  difference (VIDEO, WHATSAPP_MESSAGE CTA, page-post-backed); welcome templates are
+  API-unreadable, so the binding difference lives on Meta's side. Leading suspects:
+  (a) template created while the number is Business-Platform-registered → welcome
+  handled the API way (preview-only, business expected to reply via API); (b) some
+  property of the API-built creative (e.g. the forced `link_url api.whatsapp.com/send`).
+  **Proposed tests (owner to approve; nothing changed)**: (1) duplicate an old North ad
+  as-is into the Central ad set — if the duplicate materializes, run Central on
+  duplicated old ads (test caption-edit survival separately, since edits mint a new
+  creative); (2) hand-rebuild one Central ad fully in Ads Manager exactly like June —
+  if that materializes, the API build path is the culprit and future ads get built by
+  hand. (3) Regardless: the webhook auto-reply (real message, both sides, per-ad text,
+  100% delivery) remains the robust fix — owner parked it ("not now, maybe later").
+  Funnel note: the materialized details-ask is plausibly part of WOW-North's superior
+  10.7% close rate; Central leads currently get no in-thread ask, which matches their
+  observed "pre-fill then silence" behavior.
+
+- **2026-09-04 — Central campaign, first analysis (verdict: KEEP, don't touch; re-check
+  2026-09-11)**. Numbers in the Central table above. Findings:
+  1. **Already profitable.** ₪936 → 3 booked events = **₪312 per booking** (North: ₪228
+     reel1 / ₪322 WOW): SARAB-129 wedding 2026-11-26 al-Eizariya ₪3,500 (deposit),
+     SARAB-130 henna Lod **held 2026-09-02, ₪2,800, completed**, SARAB-134 bride's night
+     2027-05-05 (deposit, price not entered). All three from WOW-CT. Plus 5 open quotes
+     (₪11,400 priced; the ₪3,500 Jerusalem quote for 2026-08-30 is dead — date passed).
+     Booked value ≥ ₪6,300 on ₪936 spend after 9 days; one event already delivered.
+  2. **Close rate on par with the North**: 3/21 = 14% booked, 5/21 quoted, 9 days old.
+     WA-era North (Jul 23–Aug 26): WOW 15/122 = 12.3%, reel1 11/80 = 13.8%.
+  3. **Lead cost is the weak spot and it got worse mid-run.** Daily conversations
+     3·6·5·5 | 3·1·1·1·0(partial). Aug 27–30: ₪523 / 19 convos = **₪27.5**; Aug 31–Sep 3:
+     ₪395 / 6 = **₪65.8** (Sep 1–3 alone: ₪91). D1 referral leads agree: 14 then 6.
+     Link clicks did NOT fall (85 → 65) — click→message fell 22% → 9%.
+  4. **Cause candidate #1 — the owner's Aug 31 edits (activity log, Ads Manager/Power
+     Editor, 11:32–11:54 local): each ad's creative was replaced TWICE** (reel1
+     `1044037901674473` → `1943978949622338` → `28140226355662265`; WOW `1453494526621191`
+     → `935098449651755` → `1608870200910495`), each swap re-entered review and minted a
+     NEW page post + IG media (copy/title/CTA identical; video asset re-uploaded). Creative
+     changes are "significant edits" → the ad set (which had ~19 results, never out of
+     learning) restarted learning, and every post's social proof reset to zero. The slump
+     starts on that exact day. (The Aug 27 publish had already minted new creatives vs the
+     ids recorded on Aug 26 — Ads-Manager saves always do.) **Ad ids unchanged → `wa_ad_map`
+     still valid (verified: referral source_id on all 19 WA leads = the two ad ids).**
+     Cause #2 (contributing): normal launch-honeymoon decay (North fell 4× from week 1
+     to week 2). Cause #3 (structural): Central CPM ₪34 vs North launch ₪22–26, CTR half
+     (IG-heavy delivery: FB feed only 9% of spend vs 31% in the North).
+  5. **"Pre-fill then silence" (Aug 30 funnel note) is NOT supported by the data**: 19/19
+     Central WA leads sent ≥2 messages (13 sent ≥3), 19/19 got an owner reply (avg 7 in /
+     9.5 out per lead); WA-era North leads: 77% sent ≥2, 98% replied (avg 6.5 / 10.3).
+     The missing materialized welcome has no measurable effect on engagement so far.
+  6. Meta favours WOW-CT (72% of spend) and that's justified: WOW-CT keeps attention
+     (p100 7.7% vs reel1-CT 3.1%), converts clicks 1.6× better, and owns all 3 bookings.
+     reel1 is the creative that doesn't travel — it's the one to swap first, not WOW.
+  7. Jerusalem demand leak: 3 of 21 leads (one deposit + two ₪3,500 quotes) are
+     Jerusalem-area despite the exclusion (clients reached via "recent location" or living
+     in a targeted town). Opportunity for a later test, not an action now.
+  8. Spend pacing ₪78–145/day against a ₪100 budget = Meta's weekly pacing, normal.
+  **Rule agreed for 2026-09-11 check (no edits until then):** 7-day CPR (Sep 4–10) ≤ ₪40 →
+  keep as is; > ₪50 with no new booking since Sep 3 → pause and rebuild. Rebuild options,
+  in order: exclude IG feed (₪93 CPR, 20% of spend) · split Wadi Ara vs Triangle+Central
+  into two ad sets (64/36 spend today, unreadable per-town) · replace reel1-CT with a
+  fresh reel. Even at the post-edit ₪66/convo the campaign books at ≈ ₪470/event against
+  ₪2,800–3,500 tickets — still profitable, so "stop" is not on the table this week.
+
+- **2026-10-16 — Central FINAL + the 10.2026 draft (opinion only; nothing in the account
+  changed)**. Central ran Aug 27 → Sep 9 (owner paused; last spend week Sep 4–10 = ₪544 /
+  14 convos / ₪38.8). Lifetime ₪1,461 · 39 convos · CPR ₪37.47 · CTR 1.53% · CPM ₪33.3 ·
+  reach 16.7k / freq 2.6. Per ad: reel1-CT ₪507 / 9 / ₪56.4 (final week ₪130) · WOW-CT
+  ₪954 / 30 / ₪31.8 (final week ₪23.5). D1: 32 Central leads (10 reel1 / 22 WOW); **1 held
+  event** (SARAB-130 henna Lod ₪2,800, WOW); the two early-Sep deposits (SARAB-129, SARAB-134)
+  are back at استفسار today; 7 quotes still open ≈ ₪16,000, mostly 2027 dates. Verdict: not a
+  success (≈ break-even cash). Lesson confirmed: reel1 does not travel to a cold region; the WOW
+  reel carried Central. Nothing has delivered in the account since Sep 9 (last 6 weeks of leads:
+  17 organic WhatsApp, 1 referral, 11 late Central).
+  **Owner's plan found as an Ads-Manager draft**: `SARAB-Prospecting-Arabic-10.2026`, draft
+  campaign id `120251437954700256`, source = duplicate of the North campaign
+  `120247006268370256`, start 2026-10-14, draft `budget_strategy` = CAMPAIGN_BUDGET (original
+  was ABO ₪100/d on the ad set — verify before publishing). The API does NOT expose a draft's
+  ad sets/ads, so the added cities and any caption change are unverifiable from here. Plan =
+  reel1 only + a few cities + maybe a new caption.
+  **Opinion delivered** (`docs/ads-opinion-2026-10-16-reel1-rerun.html`): run it — reel1 at
+  home is still the best booking engine (₪16.9/convo, 32 live bookings) — but as a safe
+  restart, not growth: audience rested 7 weeks, not new (72.7k reached, freq 3.8, CPR climbed
+  ₪33→₪41→₪55 in Aug). Add a 2nd reel in the SAME ad set (best: new reel on reel1's formula
+  with fresh faces from the 14 October events; fallback: rested WOW). Caption = smallest lever
+  (~2/3 delivery is Stories/Reels); change only to add "2027 dates are booking" (D1: 1/3 of
+  bookings made 180+ days ahead; 22 events already on the 2027 calendar; Dec–Feb = 0 events).
+  Pre-publish: only ONE ad set on (the duplicate copied all 3 ad sets), ₪100/d ad-set budget,
+  re-set welcome/prefilled + IG identity, map the new ad ids in `wa_ad_map` + add a
+  `meta_campaign` option on day 1, never edit live (lesson 9). Expect CPR ₪20–35 then rising;
+  must beat Central's ₪37.5. Rule: 7-day CPR > ₪45 two weeks running, or no deposit by day
+  21 → add a new reel as a NEW ad, pause the loser. Judge at week 3 by quotes/deposits (October
+  leads = 2027 planners). Five Arabic caption options in the HTML (A "2027 dates" recommended;
+  B = June hook verbatim + 2027 last line). Cities booked to date: Nazareth 12, Shefa-Amr 7,
+  Sakhnin 5, I'billin 4, Lod 4, Kafr Yasif 3, Iksal 3, Nof HaGalil 3 → keep Lod/Ramla in;
+  Jerusalem leak = separate later test.
+
+- **2026-10-18 — media decision for the 10.2026 rerun (opinion; nothing in the account
+  changed)**. Owner dropped two files in `ad-reels/` (now gitignored, heavy owner media):
+  `H_ad_v04.mp4` = the NEW reel (20 s, 2160×3840 9:16, 30 fps, h264/aac; before→after montage
+  of one wedding, Farid & Natalie 16.08.2026 — ~10 pairs: couple raw at the curtain → cherry-
+  blossom after-portrait at ~1 s, tablet reveal 2–3.5 s, groups / families / kids / older
+  couples, ends on the garden after-portrait; no on-screen text; audio −7.8 LUFS integrated,
+  peaks +0.7 dBFS = clipping). **Already in the Media Library** as video `2333476437407790`
+  (owner upload 2026-10-18 12:51Z, status ready). `Screen_Recording_20261018_132112_Instagram.mp4`
+  = an Instagram screen recording of reel1 (11.8 s of the 17.4 s reel, 1080×2316 with the IG
+  UI and counters, 120 fps) — NOT an ad asset; reel1 is already in the account (library video
+  `1055218867300275`, 17.38 s; plus the June ad's own post inside the duplicate). Draft campaign
+  `120251437954700256` still EDITING / VALIDATED (last touched 10-14 14:00Z, CAMPAIGN_BUDGET);
+  account activity since 10-10 = one Meta-system auto audience (10-16). Custom-audience listing
+  and D1 phone counts were blocked by the session safety classifier → list sizes below come from
+  this doc's own numbers.
+  **Advice: BOTH reels in ONE ad set.** (1) reel1 = the duplicated June ad left untouched (same
+  post → 247 reactions / 106 saves kept; no caption edit). (2) new reel = a new ad built from
+  library video `2333476437407790`, caption A from the 10-16 HTML ("2027 dates"), its own
+  pre-filled message. Reel1 is not exhausted as a creative — close rate held while messages fell
+  (audience fatigue at freq 3.8 / 72.7k reached); 7 weeks' rest recovers part of it; the new reel
+  is the fresh-faces fix, and Meta moves spend to the cheaper ad within days. Before building the
+  new-reel ad (re-export + re-upload is free while it is not in an ad): 3–5-word Arabic hook on
+  frames 0–2.5 s, top third (as done on WOW); audio to ≈ −14 LUFS / −1 dBTP; confirm the track is
+  licensed for ads (else pick music inside Ads Manager); couple's consent for ad use. Build the
+  ads BY HAND in Ads Manager (June ads materialize the WhatsApp welcome bubble; the API-built
+  Central ads did not — 08-30 investigation). Upgrades vs June: Advantage+ audience with a
+  **customer-list custom audience of every WhatsApp lead number (~700–800: 649 North + 39 Central
+  + 8 Hebrew conversations + organic)** as the audience *suggestion* — not a lookalike on its own
+  (seed too small to be precise), not a hard filter; per-reel `meta_campaign` sources +
+  `wa_ad_map` rows on day 1 (`North-10.2026-reel1` / `North-10.2026-new-reel`); Advantage+
+  creative enhancements that alter the video OFF; keep Advantage+ placements, revisit IG feed at
+  day 14 only if its CPR is > 2× the rest; ₪100/d on the one ad set, no raise before day 14;
+  plan the next reel (bride's night, reel1 formula, October footage) for week 5–6 as a NEW ad.
+  Optional phase 2 (from week 2): warm ad set ₪20–25/d = lead list + IG engagers 365d + 50%
+  viewers, new reel + 2027 caption (open quotes ≈ ₪160k pipeline). Not recommended: bulk
+  WhatsApp to the list (Communications Law §30A consent; number quality rating). Privacy note:
+  uploading hashed numbers to Meta is a secondary use of quote-request data under the Privacy
+  Protection Law — owner's call; the privacy notice should mention marketing use.
+
+- **2026-10-19 — Q&A recap for the 10.2026 rerun (no account change)**. Owner asked how to
+  keep reel1's reactions on the duplicate, whether both reels may share one opening WhatsApp
+  message, and what is optimized vs June. On record: (a) Reactions live on the June ad's page
+  post, not on the campaign. A duplicate keeps them only if "Show existing reactions, comments
+  and shares on new ads" was ticked in the Duplicate dialog (Meta help article 209669919072999)
+  AND the duplicated ad is never edited afterwards (text, headline, video, thumbnail, CTA,
+  identity) — any creative save mints a new post (lesson 9). Verify in the draft: open the reel1
+  ad → the preview must show the existing reactions/comments; if it shows zero engagement, delete
+  that draft ad and re-duplicate only the June reel1 ad into the new ad set with the box ticked.
+  The message template (welcome + prefilled) is copied with the duplicate — check it, don't
+  re-save unless missing. Help-article caveat: engagement carries over only once if the ad had
+  placement-customized creative. (b) Welcome (greeting): same text on both ads is fine and
+  preferred (Central did this). Prefilled (customer's first message): primary attribution is
+  `wa_ad_map` by ad id (19/19 verified in Central), so a shared prefill is not wrong — it only
+  drops the backup signal. Recommendation: leave reel1's June prefill untouched (editing it = a
+  creative edit) and give the new reel's ad a prefill that differs by at least one word. Both ads
+  get NEW ad ids → two new `wa_ad_map` rows + two `meta_campaign` options on day 1. (c) The
+  "optimized vs June" list = the 2026-10-18 upgrades above (lead-list as A+ audience suggestion,
+  both reels in one ad set, caption A on the new reel only, A+ creative video enhancements OFF,
+  ONE ad set at ₪100/d ABO — verify the draft's CAMPAIGN_BUDGET, no raise before day 14, IG-feed
+  check at day 14, per-reel attribution on day 1, never edit live, judge at week 3 by
+  quotes/deposits, swap rule = 7-day CPR > ₪45 two weeks running or no deposit by day 21, next
+  reel planned for week 5–6 as a new ad, optional warm ad set from week 2).
+  **Follow-up (same day)**: owner says they already changed the welcome/prefilled messages on
+  the draft reel1 ad. Advice: do NOT rebuild everything — reactions sit on the post, and the
+  message template is a creative-level field (API: `page_welcome_message`), so an existing-post
+  duplicate should keep its post through that edit; the preview is the test. If the preview shows
+  no engagement, re-duplicate only the one reel1 ad (2 min), set the messages again, re-check; if
+  the messages cost the post, keep the June messages + reactions (they produced 32 bookings).
+  Reactions do not change reach (budget ÷ CPM); they nudge trust/CTR a little, mostly in Reels
+  and feed, not Stories. Lead list explained to the owner (what a customer-list audience is,
+  suggestion vs warm retargeting, ~½–⅔ match rate, the list is LEADS not bookers, privacy call,
+  CSV upload from D1 — no manual typing; zero-upload alternatives = IG/FB engagers 365d + 50%
+  video viewers).
+  **Follow-up 2 (same day)**: (1) Draft ad set shows A+ audience with suggestions age 22–45,
+  all genders, interests Wedding reception / Wedding planning / Event management / Engagement /
+  Weddings / Photography (= June). reel1-North lifetime by age (API, 2026-10-19): 18–24 ₪950 /
+  62 convos / ₪15.3 · 25–34 ₪3,305 / 208 / ₪15.9 · 35–44 ₪1,380 / 75 / ₪18.4 · 45–54 ₪1,498 /
+  68 / ₪22.0 · 55–64 ₪561 / 31 / ₪18.1 · 65+ ₪166 / 22 / ₪7.5; female ₪5,856 / 352 / ₪16.6,
+  male ₪1,963 / 111 / ₪17.7. A+ already spent 28% outside the 22–45 hint at near-equal cost →
+  advice: leave age + interests exactly as June; the only targeting upgrade worth making is the
+  lead list as an extra suggestion. (2) 700–800 numbers is NOT a verified count — it is the sum
+  of Meta conversation counts (a person can start several); unique numbers in D1 are probably
+  lower. Owner to run the DISTINCT-phone count on `wa_messages` (direction in; with/without
+  referral) with the `!` prefix. (3) Owner's test: a clean duplicate with the engagement box
+  ticked still shows no reactions in the draft preview → the preview is not the test. Plan:
+  keep the 10.2026 draft (owner's messages), discard the test duplicate, publish with the ad
+  set OFF, then compare the new ad's effective post id with the June creative `1897719270888300`
+  via the API before switching on. (4) Four on-video hook options for the new reel added to
+  `docs/ads-opinion-2026-10-16-reel1-rerun.html` (section "New reel: the on-video hook");
+  H1 "Your guests, before and after" recommended; frames 0–2.5 s, top third below the top 10%.
+  **Follow-up 3 (same day) — lead-list size verified + budget screen**: owner ran the DISTINCT
+  phone count on `wa_messages` (direction in): **658 unique numbers in all, 316 with an ad
+  referral** (the earlier 700–800 was a sum of conversation counts — superseded). Advice: upload
+  ALL 658 as ONE customer-list custom audience (the A+ suggestion), not the 316 — after phone-only
+  matching (~½–⅔) 658 ≈ 330–440 matched people vs ≈ 160–210 for the 316; the 342 non-ad numbers
+  are organic WhatsApp inquiries (same customer, warmer), and the 316 sit inside the 658 anyway.
+  Clean first: 658 = every number that ever wrote in (suppliers, halls, the owner's own tests) →
+  keep only numbers linked to a bookings row (`booking_id` set, or last-9-digit match on
+  `bookings.phone`); if that drops only a handful, upload the linked set, else all 658. Export =
+  wrangler `--json` + jq to a `phone,country` CSV outside the repo (digits with 972 code, country
+  IL), owner-run, never pasted into a session; name the audience with the date, refresh monthly.
+  Budget screen verified from screenshot: **Ad set budget (ABO)** selected, Advantage+ campaign
+  budget off, "share up to 20% with other ad sets" unchecked — correct; keep sharing off even when
+  the optional warm ad set is added (week 2) so the ₪100 / ₪20–25 split stays explicit. Still to
+  verify in the draft: only ONE ad set on, its daily budget = ₪100.
+  **Follow-up 4 (same day) — WhatsApp number audit, run by Claude with the owner's explicit
+  permission (count-only queries on prod D1; nothing changed)**. 658 unique inbound numbers =
+  **316 ad-referred** + 129 non-ad with an office record + 36 two-way organic chats without a record
+  + **177 not real inquiries** (118 history-sync `errors` rows with no readable message, 48 live
+  `unsupported`-type first messages — stickers/reactions; the webhook deliberately creates no lead
+  for them — 11 single unanswered texts, 1 media placeholder). linked_n 383 = numbers with a
+  bookings row (358 via `booking_id` + 25 by last-9-digit phone match); best status per number:
+  استفسار 193 · عرض سعر 112 · مكتمل 28 · مؤكد 26 · ملغي 24. The 275 without a row: 62 are
+  June–July ad leads from before the office integration (history sync never auto-creates — real
+  leads the office never received; addable via أضف كاستفسار, optional), 36 two-way chats, 177
+  noise. First contact by month: Jun 183 · Jul 187 · Aug 248 · Sep 25 · Oct 12.
+  **Legitimate lead list = 481** (rule: ad referral OR bookings row OR an outbound reply exists =
+  658 − 177). Exported to `~/sarab-leads-2026-10-19.csv` (`phone,country`; 972-digit numbers + IL;
+  outside the repo; numbers never displayed in the session) — ready for Ads Manager → Audiences →
+  Create → Customer list; expected match ≈ 240–320 people. Tooling: remote D1 reads work with
+  `CLOUDFLARE_API_TOKEN` from `~/.secrets/sarab-cf-token` and `--command` (`--file` goes through the
+  import path and returns only stats).
+  **Follow-up 5 (same day) — completing the office record (owner: "yes")**: the 62 pre-office ad
+  leads (history-synced chats Jun 7 → Jul 23 2026 with a CTWA referral and no bookings row; dry run:
+  40 from reel1-North ad `120247040596070256`, 7 → `reel-wow-reaction` via wa_ad_map, 13 from other
+  June/July ads + 2 referrals without an id → base `إعلان ممول (Meta)`) get added exactly like the
+  أضف كاستفسار button: استفسار, source whatsapp, local 05 phone, added_at = first message date,
+  extra `wa.referral` + `from_history` + marker `batch = 2026-10-19-history-leads` (finds or reverts
+  the batch precisely). Backup first: `ops/db-backups/2026-10-19-pre-history-leads/` (bookings 431
+  rows / max id 436; 2,861 wa_messages links). The write was blocked by the session's auto-mode
+  classifier ("Modify Shared Resources") → SQL saved to `ops/sql/2026-10-19-history-leads.sql`
+  (gitignored) for the owner to apply; expected after: bookings 493, 62 batch rows, numbers with a
+  record 383 → 445, rows id ≤ 436 identical to the backup — Claude verifies read-only afterwards.
+  Privacy page (`public/privacy.html`) already names marketing use and sharing with ad platforms
+  "such as Meta" for measurement and campaign optimization; a customer-list upload is best covered
+  by one explicit clause (drafted in chat for sign-off, not deployed).
+
+- **2026-10-20 — 10.2026 North rerun PUBLISHED by the owner (Ads Manager, ad set ON at
+  11:20Z, ads in review; API-verified right after)**. Morning prep: the lead CSV
+  (`~/sarab-leads-2026-10-19.csv`, 481 numbers) uploaded as customer-list custom audience
+  `120251530096010256` "sarab-leads-2026-10-19.csv", placed under "Suggest an audience" only
+  (advice: no engager/viewer/lookalike audiences in the prospecting ad set — they are the
+  saturated North crowd; keep them for the optional warm ad set). Ads Manager then showed
+  "Estimated audience size: Below 1,000" — expected, the estimator ignores A+ expansion and
+  counts the matched list as if it were a hard filter. Copy decisions in the draft: reel1 back
+  to the single June caption (the owner had added captions A + D as text options — removed;
+  headline + description were already June verbatim per creative `1897719270888300`); new
+  reel = caption D primary + caption A second option, June caption dropped as a third;
+  welcome identical on both ads (fine), prefill shared (owner kept it; wa_ad_map by ad id is
+  the primary attribution). A "headline must be specified for a whatsapp destination" red
+  validator stuck on the new-reel ad through every fix (stale form state) — it published
+  anyway. A+ creative enhancements (video touch-ups, relevant comments, video effects) and
+  A+ voice translation turned OFF on both ads before publishing.
+  **Published structure (API)**: campaign `120251437954700256` ACTIVE, OUTCOME_LEADS, no
+  campaign budget (ABO). ONE ad set `120251437954780256` "SARAB-Arabic-Cold-Weddings+Events":
+  ₪100/day, Highest volume, CONVERSATIONS → WHATSAPP, `is_dynamic_creative` false, A+
+  audience (`advantage_audience` 1, `targeting_optimization` expansion_all,
+  `targeting_relaxation_types.custom_audience` 1 → the list is a suggestion, not a filter;
+  Meta auto-built a hidden 1% lookalike `120251532753170256` from it), age hint 22–45, June
+  interests (Wedding reception / planning / Event management / Engagement / Weddings /
+  Photography), 52 North + Haifa-district cities plus the Judeida-Makr 2-mile pin, LB / PS /
+  Hebron excluded, mobile only, FB + IG Advantage+ placements. Ads (both created 11:20:43Z):
+  `reel1-Angie's friends` `120251437954710256` → creative `1091406733702029` (June
+  body/title/description verbatim, WHATSAPP_MESSAGE) and `reel-farid-natalie`
+  `120251504642110256` → creative `39205352215777962` (body = caption D, title "memory in
+  every guest's hand", description D; extra text options are not exposed by the API).
+  **Reel1 did NOT keep the June post**: new video `1096177183145289`, post
+  `1203813356142408_1096177183145289` vs June `1203813356142408_4162392803891516` → the 247
+  reactions / 106 saves start from 0 (the accepted small loss; no re-duplicate — the owner's
+  clean-duplicate test lost it too, so the edits were not the cause). New reel post
+  `1203813356142408_122145409113357171`, IG media `18220166833344215`.
+  **Attribution wiring APPLIED (same day, ~14:30 local, with the owner's explicit permission:
+  "you have permission to run the commands and set the office correctly… we should not lose
+  any of our data")**: `ops/sql/2026-10-20-north-rerun-wiring.sql` (guarded INSERTs, office-API
+  shape) → meta_campaign `North-10.2026-reel1` + `North-10.2026-farid-natalie` (the owner's
+  name for the new reel's source; options ids 52–53, pos 4–5), wa_ad_map
+  `120251437954710256|North-10.2026-reel1` + `120251504642110256|North-10.2026-farid-natalie`
+  (ids 54–55); options 51 → 55, the 51 old rows identical to the backup. **History leads
+  APPLIED too** (`ops/sql/2026-10-19-history-leads.sql`; dry-run count re-checked = 62 first):
+  bookings 431 → 493 (ids 438–499, all استفسار / source whatsapp; lead_source 7
+  `reel-wow-reaction` + 55 base `إعلان ممول (Meta)`), 695 wa_messages links NULL → new rows and
+  nothing else changed (phones, existing links, all 431 old bookings rows identical, none
+  missing; the day's own office activity, one row added and one removed, max id 436 → 437, is
+  from the owner, not the batch). 61 of the 62 have no display name — history-synced chats
+  carry no profile name, exactly what the office button produces for them; fill from the chat
+  when a lead matters. Backups: `ops/db-backups/2026-10-20-pre-north-wiring/` (options,
+  bookings, wa_links) + the post-state in `ops/db-backups/2026-10-20-post-north-wiring/`.
+  Tooling: with the owner's permission stated in the message, wrangler `--file` prod writes
+  went through this time (not classifier-blocked).
+  **Watch plan**: no budget raise before day 14; IG-feed CPR check at day 14; judge at week 3
+  by quotes/deposits, not conversations; swap rule = 7-day CPR > ₪45 two weeks running or no
+  deposit by day 21; next reel (bride's night, reel1 formula) week 5–6 as a NEW ad; optional
+  warm ad set ₪20–25/d from week 2 (lead list + IG engagers 365d + 50% viewers); never edit
+  the live ads (lesson 9).
+
 1. Launch week is anomalously cheap (₪3.59 CPR) — never judge a creative on week 1.
 2. Creative×audience lifespan here ≈ 6–8 weeks before CPR doubles. Plan a fresh reel
    every ~6 weeks per audience.
@@ -222,3 +560,7 @@ totals will improve somewhat as quotes convert.
    Open with the customer question/emotion; at most one proof line ("first in the
    country"), never as the opener. The caption answers a video hook in guest terms —
    no curiosity gaps in paid CTWA ads.
+9. **Never edit a live ad in Ads Manager "just to fix a detail"**: every save mints a new
+   creative AND a new post (likes/views reset), re-enters review, and restarts the ad set's
+   learning phase. Central lost its week-2 momentum to two such saves on 2026-08-31. Batch
+   fixes into the next planned creative swap instead.

@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8">
+<title>Reel1 October Rerun</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Source+Serif+4:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column, verdict first, evidence tables, then RTL caption cards with copy buttons. */
+:root{
+  --bg:#f4f4f1; --panel:#ffffff; --fg:#1d2126; --muted:#5c646d; --line:#d8d8d2;
+  --accent:#9a6f17; --accent-soft:#f3ead3; --good:#2f7a4e; --warn:#a8691a; --bad:#b03a3a;
+  --font-body:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --font-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-ar:"IBM Plex Sans Arabic","Segoe UI","Noto Sans Arabic",Tahoma,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15171a; --panel:#1d2024; --fg:#e7e5df; --muted:#9ca4ad; --line:#2d3137;
+    --accent:#d8aa4b; --accent-soft:#2a251a; --good:#5fb584; --warn:#d6a04a; --bad:#e06d6d; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15171a; --panel:#1d2024; --fg:#e7e5df; --muted:#9ca4ad; --line:#2d3137;
+  --accent:#d8aa4b; --accent-soft:#2a251a; --good:#5fb584; --warn:#d6a04a; --bad:#e06d6d; color-scheme:dark;
+}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:17px;line-height:1.55;margin:0}
+.page{max-width:740px;margin:0 auto;padding-block:36px 72px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.eyebrow{font:500 12px/1.4 var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+h1{font:600 30px/1.2 var(--font-ui);margin:0 0 6px;text-wrap:balance}
+.sub{margin:0 0 28px;color:var(--muted)}
+h2{font:600 20px/1.3 var(--font-ui);margin:40px 0 12px;text-wrap:balance}
+h3{font:600 16px/1.3 var(--font-ui);margin:24px 0 8px}
+p{margin:0 0 12px;max-width:68ch}
+ul,ol{margin:0 0 14px;padding-inline-start:1.25em;max-width:68ch}
+li{margin:0 0 7px}
+strong{font-weight:600}
+.verdict{border-left:4px solid var(--accent);background:var(--accent-soft);padding:16px 20px;margin:0 0 8px}
+.verdict p:last-child{margin-bottom:0}
+.scroll{overflow-x:auto;margin:0 0 10px}
+table{width:100%;border-collapse:collapse;font-family:var(--font-ui);font-size:14.5px;font-variant-numeric:tabular-nums;min-width:520px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:13px;letter-spacing:.02em}
+td.n,th.n{text-align:right;white-space:nowrap}
+tr.hi td{color:var(--accent);font-weight:500}
+.note{font:400 14px/1.5 var(--font-ui);color:var(--muted);margin:0 0 16px;max-width:68ch}
+.months{min-width:0}
+.months td,.months th{padding:6px 6px;text-align:center}
+.months td.zero{color:var(--bad)}
+.months td.peak{color:var(--accent);font-weight:600}
+.caps{display:grid;gap:18px;margin:0 0 8px}
+.cap{background:var(--panel);border:1px solid var(--line);padding:16px 18px;display:grid;gap:10px;min-width:0}
+.cap-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 12px;align-items:baseline}
+.cap-head .tag{font:600 13px var(--font-ui);color:var(--accent);letter-spacing:.02em}
+.cap-head .use{font:400 13.5px/1.4 var(--font-ui);color:var(--muted);flex:1 1 260px;min-width:0}
+.lbl{font:500 11.5px var(--font-ui);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0 0 3px}
+.ar{direction:rtl;text-align:right;font-family:var(--font-ar);font-size:17px;line-height:1.85;white-space:pre-line;margin:0;unicode-bidi:plaintext}
+.ar.small{font-size:15.5px;line-height:1.7}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:520px){.row{grid-template-columns:1fr}}
+.btn{font:500 13px var(--font-ui);padding:6px 11px;border:1px solid var(--line);background:transparent;color:var(--fg);cursor:pointer;border-radius:3px;justify-self:start}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.src{font:400 13px/1.5 var(--font-ui);color:var(--muted);border-top:1px solid var(--line);padding-top:14px;margin-top:40px}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <p class="eyebrow">SARAB · Meta ads · opinion · 16 October 2026</p>
+  <h1>Should the 10.2026 campaign be an almost-exact rerun of reel1?</h1>
+  <p class="sub">Numbers pulled today from the ad account and the bookings database. Nothing in the account was changed.</p>
+
+  <div class="verdict">
+    <p><strong>Yes, run it. Reel1 in the North is still the best booking engine the account has ever had, and the Central test confirmed the opposite lesson: reel1 only works where SARAB is already known.</strong></p>
+    <p>But an almost-identical rerun is a safe restart, not a growth move. The North audience is rested, not new. Expect it to start cheaper than it ended in August and to tire faster than it did in June. Two changes raise the ceiling without extra budget: put a <strong>second reel beside reel1 in the same ad set</strong> instead of running it alone, and let the caption carry the one piece of news the audience does not have yet: <strong>2027 dates are being booked now</strong>.</p>
+  </div>
+
+  <h2>What the numbers say</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Ad</th><th>Ran</th><th class="n">Spend</th><th class="n">Conversations</th><th class="n">Per conversation</th><th>Bookings</th></tr></thead>
+    <tbody>
+      <tr class="hi"><td>reel1, North</td><td>Jun 7 → Aug 27</td><td class="n">₪7,861</td><td class="n">466</td><td class="n">₪16.9</td><td>32 live (13 confirmed, 19 held), 16 cancelled</td></tr>
+      <tr><td>WOW reel, North</td><td>Jul 22 → Aug 25</td><td class="n">₪5,146</td><td class="n">149</td><td class="n">₪34.5</td><td>16 live, 9 cancelled</td></tr>
+      <tr><td>Central, both ads</td><td>Aug 27 → Sep 9</td><td class="n">₪1,461</td><td class="n">39</td><td class="n">₪37.5</td><td>1 held (henna, Lod, ₪2,800)</td></tr>
+      <tr><td>&nbsp;&nbsp;reel1-CT</td><td></td><td class="n">₪507</td><td class="n">9</td><td class="n">₪56.4</td><td>0</td></tr>
+      <tr><td>&nbsp;&nbsp;WOW-CT</td><td></td><td class="n">₪954</td><td class="n">30</td><td class="n">₪31.8</td><td>1</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">North bookings are counted from the dashboard's generic Meta source, which was 97% reel1. Central's two early-September deposits are back at inquiry status today; seven Central quotes worth about ₪16,000 are still open, most for 2027 dates.</p>
+
+  <h3>Why the North stopped in August</h3>
+  <ul>
+    <li><strong>The audience was used up, not the video.</strong> 72,741 people reached, 3.8 views each. Weekly cost per conversation went ₪3.6 at launch, ₪15 to ₪25 through June and July, then ₪33, ₪41 and ₪55 in the three August weeks.</li>
+    <li><strong>People who messaged still booked</strong> at the same rate (7% lifetime, 14% in the WhatsApp era). Fewer people messaged. That is the signature of fatigue.</li>
+    <li>Seven weeks off and a few new towns bring part of that back, not all of it. Meta still serves the ad first to the same high-intent people, and most of them have already seen it four times.</li>
+  </ul>
+
+  <h3>What Central actually proved</h3>
+  <ul>
+    <li>The region was expensive (CPM ₪33 vs ₪28, click rate half the North's), and the two Ads Manager saves on Aug 31 restarted learning mid-run.</li>
+    <li><strong>Reel1 was the weak ad there, the WOW reel carried it.</strong> In the final week reel1-CT cost ₪130 per conversation; WOW-CT cost ₪23.5 and owned the only booking.</li>
+    <li>So going back to the North with reel1 is the correct reading. The same logic says a cold town inside the new city list will not respond to reel1 the way Nazareth did.</li>
+  </ul>
+
+  <h2>What I would change in the plan</h2>
+
+  <h3>1. Don't replace reel1. Put a second reel next to it.</h3>
+  <p>Budget sits on the ad set, so a second ad does not halve reel1's reach; Meta sends 80 to 90% of spend to whichever ad converts cheaper. A losing second ad costs a few shekels a day. A winning one covers the week-four fade that will come sooner this time.</p>
+  <ol>
+    <li><strong>Best: a new reel built on reel1's formula with new faces.</strong> A group of friends at a bride's night, the pose, the print landing in a hand, end on the after-portrait. October has 14 events on the calendar, so the footage exists. New faces reset the "seen this" reflex while keeping the structure that produced 35 bookings.</li>
+    <li><strong>If no new reel can be ready: the WOW reel.</strong> Rested since Aug 25, it carried Central and closed better than reel1 in the North (10.7% vs 7.1% of conversations booked). It is a weaker lead buyer than reel1 at home, which is exactly why it belongs as the backup ad, not the only one.</li>
+  </ol>
+  <p>Running the WOW reel <em>instead of</em> reel1 would be a step back (₪322 per booking vs ₪228, and it burned out in five weeks). Running a brand-new reel alone is a gamble. Both reels in one ad set is the free A/B.</p>
+
+  <h3>2. The caption is the smallest lever. Change it only to add news.</h3>
+  <ul>
+    <li>About two thirds of delivery was Instagram Stories and Reels, where the caption is barely read. The first two seconds of video do the selling.</li>
+    <li>A new caption creates a new post, so the visible counters restart (247 reactions, 106 saves, 2 comments on the June post). Small loss, acceptable.</li>
+    <li>The only new fact worth adding is the season. A third of all bookings are made six or more months ahead, and 22 events already sit on the 2027 calendar. October buyers are planning spring and summer 2027. Say so.</li>
+  </ul>
+
+  <h3>3. Before publishing (the API can see the draft campaign, not its ad sets)</h3>
+  <ul>
+    <li><strong>The duplicate copied the whole campaign</strong>: the reel1 ad set, the WOW ad set and the old "Copy" test. Only one ad set should be on.</li>
+    <li>The draft shows a <strong>campaign-level budget</strong> setting. The original ran ₪100/day on the ad set. Keep ₪100/day on one ad set, not ₪150 (that burned the WOW ad set in five weeks).</li>
+    <li>Re-set the WhatsApp welcome and pre-filled message on the new ad and attach the Instagram identity. A copy does not guarantee either.</li>
+    <li>Map the new ad IDs in the office WhatsApp tab and add a campaign source before the first lead arrives, or every booking falls into the generic Meta source.</li>
+    <li>After it goes live, do not edit the ad "to fix a detail". Every save re-mints the post and restarts learning. Batch fixes into the next creative swap.</li>
+  </ul>
+
+  <h2>What to expect, and when to act</h2>
+  <p>My estimate for the rerun is <strong>₪20 to ₪35 per conversation</strong> in the first weeks, drifting upward. The bar is simple: it must beat Central's ₪37.5, or the audience has not recovered. At ₪30 and the North's close rates, a booking costs ₪215 to ₪420 against an average ticket of about ₪1,850. Profitable. The open question is lifespan; four to six good weeks is realistic, not eleven.</p>
+  <div class="scroll">
+  <table class="months">
+    <thead><tr><th>Events on the calendar</th><th>Oct</th><th>Nov</th><th>Dec</th><th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>May</th><th>Jun</th><th>Jul</th><th>Aug</th><th>Sep</th></tr></thead>
+    <tbody><tr><td>2026 → 2027</td><td class="peak">14</td><td>5</td><td class="zero">0</td><td class="zero">0</td><td class="zero">0</td><td>1</td><td>5</td><td>5</td><td>2</td><td>2</td><td>4</td><td>3</td></tr></tbody>
+  </table>
+  </div>
+  <p class="note">October's 14 events were booked in July and August. December to February is empty. October leads will mostly be 2027 planners with long close cycles, so judge the campaign at week three by quotes and deposits, not by held events.</p>
+  <p><strong>Rule:</strong> if the 7-day cost per conversation stays above ₪45 for two weeks in a row, or there is no deposit by day 21, add a new reel as a new ad, then pause the loser. Never edit the existing ad.</p>
+
+  <h3>About the added cities</h3>
+  <p>I cannot see which towns were added; the draft's ad sets are not exposed. Adding towns inside the Galilee is fine and will move the economics only in proportion to the people they add. Where bookings actually came from: Nazareth 12, Shefa-Amr 7, Sakhnin 5, I'billin 4, Lod 4, Kafr Yasif 3, Iksal 3, Nof HaGalil 3. Lod booked as much as I'billin, so keeping Lod and Ramla in is justified. The Jerusalem-area demand that leaked into Central (three leads, two ₪3,500 quotes) deserves its own small test later, not a seat in this ad set.</p>
+
+  <h2>Caption options</h2>
+  <p class="note">All five follow the house rule: the customer and their guests first, one proof line at most and never as the opener, three lines, no curiosity gaps. The first line must work alone, since it is all that shows before "See more". A is my pick; B is the minimal change for anyone who wants to keep the proven hook.</p>
+
+  <div class="caps">
+
+    <div class="cap">
+      <div class="cap-head"><span class="tag">A · 2027 dates (recommended)</span><span class="use">Carries the only new information. Pairs with the existing headline.</span></div>
+      <div><p class="lbl">Primary text</p><p class="ar" id="capA" lang="ar">عرسكم بالـ 2027؟ التواريخ بلّشت تنحجز 📅
+تصوير ستوديو بالذكاء الاصطناعي بقلب مناسبتكم، وكل ضيف بيطلع بصورته مطبوعة بإيده بنفس اللحظة.
+احجزوا تاريخكم من هلأ عالواتساب 👇</p></div>
+      <div class="row">
+        <div><p class="lbl">Headline</p><p class="ar small" lang="ar">خلّي عرسك حدث ما بينتسى</p></div>
+        <div><p class="lbl">Description</p><p class="ar small" lang="ar">أول زاوية تصوير بالذكاء الاصطناعي من نوعها بالبلاد.</p></div>
+      </div>
+      <button class="btn" type="button" data-copy="capA">Copy primary text</button>
+    </div>
+
+    <div class="cap">
+      <div class="cap-head"><span class="tag">B · The proven hook, refreshed</span><span class="use">Line 1 is the June winner verbatim. Only the last line changes. Lowest risk.</span></div>
+      <div><p class="lbl">Primary text</p><p class="ar" id="capB" lang="ar">ليش العرسان عم يختارو زاوية سراب بدل السيلفي بوكس؟ 👀
+مش مجرد صورة… تجربة ستوديو بالذكاء الاصطناعي، والصورة مطبوعة بإيد كل ضيف بثواني.
+تواريخ 2027 بلّشت تنحجز. احجزوا تاريخكم عالواتساب 👇</p></div>
+      <div class="row">
+        <div><p class="lbl">Headline</p><p class="ar small" lang="ar">خلّي عرسك حدث ما بينتسى</p></div>
+        <div><p class="lbl">Description</p><p class="ar small" lang="ar">زاوية تصوير بالذكاء الاصطناعي لأعراسكم وكل مناسباتكم.</p></div>
+      </div>
+      <button class="btn" type="button" data-copy="capB">Copy primary text</button>
+    </div>
+
+    <div class="cap">
+      <div class="cap-head"><span class="tag">C · Bride's night</span><span class="use">Bride's nights equal weddings in the books (22 each) and 88% of spend already reaches women. Fits reel1's cast of friends.</span></div>
+      <div><p class="lbl">Primary text</p><p class="ar" id="capC" lang="ar">سهرة العروس بدها لحظة بتضل بالبال 🤍
+صحباتك بيوقفوا قدام الكاميرا، وبثواني كل وحدة بإيدها صورة ستوديو مطبوعة.
+ابعتولنا التاريخ والمدينة عالواتساب وبنرد فوراً 👇</p></div>
+      <div class="row">
+        <div><p class="lbl">Headline</p><p class="ar small" lang="ar">سهرة عروس ما بتنتسى</p></div>
+        <div><p class="lbl">Description</p><p class="ar small" lang="ar">زاوية تصوير بالذكاء الاصطناعي للسهرات والأعراس والحنة.</p></div>
+      </div>
+      <button class="btn" type="button" data-copy="capC">Copy primary text</button>
+    </div>
+
+    <div class="cap">
+      <div class="cap-head"><span class="tag">D · What the guests take home</span><span class="use">Pure guest benefit, answers what the video shows. Good second caption if two ads run.</span></div>
+      <div><p class="lbl">Primary text</p><p class="ar" id="capD" lang="ar">شو بياخدوا ضيوفكم معهم من العرس؟
+صورة ستوديو بالذكاء الاصطناعي، مطبوعة بإيدهم قبل ما يرجعوا عالطاولة.
+بلا مصوّر، بلا انتظار. احجزوا تاريخكم عالواتساب 👇</p></div>
+      <div class="row">
+        <div><p class="lbl">Headline</p><p class="ar small" lang="ar">ذكرى بإيد كل ضيف</p></div>
+        <div><p class="lbl">Description</p><p class="ar small" lang="ar">تصوير ستوديو فوري بمناسبتكم، والطباعة بنفس اللحظة.</p></div>
+      </div>
+      <button class="btn" type="button" data-copy="capD">Copy primary text</button>
+    </div>
+
+    <div class="cap">
+      <div class="cap-head"><span class="tag">E · A season behind us</span><span class="use">Social proof. The dashboard shows 36 held events today, so "more than 35" is true; recheck the number on the day you publish.</span></div>
+      <div><p class="lbl">Primary text</p><p class="ar" id="capE" lang="ar">هالموسم كنا بأكثر من 35 مناسبة 🤍
+بكل واحدة، كل ضيف طلع بصورة ستوديو مطبوعة بإيده بنفس اللحظة.
+دوركم بالـ 2027؟ احجزوا تاريخكم عالواتساب 👇</p></div>
+      <div class="row">
+        <div><p class="lbl">Headline</p><p class="ar small" lang="ar">موسم 2027 بلّش يتحجز</p></div>
+        <div><p class="lbl">Description</p><p class="ar small" lang="ar">أول زاوية تصوير بالذكاء الاصطناعي من نوعها بالبلاد.</p></div>
+      </div>
+      <button class="btn" type="button" data-copy="capE">Copy primary text</button>
+    </div>
+
+  </div>
+
+  <h2>New reel: the on-video hook (added 19 October)</h2>
+  <p class="note">The new wedding montage has no on-screen text. Put one short line on frames 0 to 2.5 s, top third, below the top 10% of the frame (the Reels interface covers that strip), white bold with a soft shadow, the same style as the WOW hook. Off before the tablet reveal at about 2 s so the reveal stays clean. Never over a face. Three to five words. Caption A then answers the hook with the one piece of news: 2027 dates are booking.</p>
+
+  <div class="caps">
+
+    <div class="cap">
+      <div class="cap-head"><span class="tag">H1 · Your guests, before and after (recommended)</span><span class="use">Labels exactly what the viewer is watching: pair after pair. Guest terms, three words, no company name.</span></div>
+      <div><p class="lbl">Hook text</p><p class="ar" id="hookA" lang="ar">ضيوفكم… قبل وبعد 👀</p></div>
+      <button class="btn" type="button" data-copy="hookA">Copy hook</button>
+    </div>
+
+    <div class="cap">
+      <div class="cap-head"><span class="tag">H2 · This is how your wedding photos turn out</span><span class="use">Puts the viewer in the couple's seat. Pairs best with caption D.</span></div>
+      <div><p class="lbl">Hook text</p><p class="ar" id="hookB" lang="ar">هيك بطلعوا صور عرسكم 🤍</p></div>
+      <button class="btn" type="button" data-copy="hookB">Copy hook</button>
+    </div>
+
+    <div class="cap">
+      <div class="cap-head"><span class="tag">H3 · Every guest, a studio photo</span><span class="use">Benefit first, five words. Slightly longer on screen; use only if the font stays large.</span></div>
+      <div><p class="lbl">Hook text</p><p class="ar" id="hookC" lang="ar">كل ضيف بيطلع بصورة ستوديو</p></div>
+      <button class="btn" type="button" data-copy="hookC">Copy hook</button>
+    </div>
+
+    <div class="cap">
+      <div class="cap-head"><span class="tag">H4 · From the curtain to the studio in seconds</span><span class="use">Mirrors the first frame (the couple at the curtain). Weakest of the four: the curtain is SARAB's detail, not the guest's.</span></div>
+      <div><p class="lbl">Hook text</p><p class="ar" id="hookD" lang="ar">من الستارة للستوديو بثواني</p></div>
+      <button class="btn" type="button" data-copy="hookD">Copy hook</button>
+    </div>
+
+  </div>
+
+  <p class="src">Sources: Meta Marketing API, lifetime and Sep 4 to Oct 16 windows, pulled 16 Oct 2026; bookings database, read-only; docs/07-META-ADS.md. The 10.2026 duplicate exists only as an unpublished Ads Manager draft; nothing has delivered in the account since Sep 9.</p>
+</div>
+
+<script>
+document.querySelectorAll('[data-copy]').forEach(function(b){
+  b.addEventListener('click', async function(){
+    var el = document.getElementById(b.dataset.copy);
+    var text = el.innerText;
+    var original = b.textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      b.textContent = 'Copied';
+    } catch (e) {
+      var r = document.createRange(); r.selectNodeContents(el);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      b.textContent = 'Selected, press Ctrl+C';
+    }
+    setTimeout(function(){ b.textContent = original; }, 2200);
+  });
+});
+</script>
+</body>
+</html>
