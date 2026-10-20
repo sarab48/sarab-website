@@ -4,7 +4,7 @@
 */
 import { normalizeCity } from '../../../shared/intel.js'
 import { syncBookingCalendar } from '../../../shared/gcal.js'
-import { displayName } from '../../../shared/names.js'
+import { displayName, nameSql } from '../../../shared/names.js'
 
 // Fields the office may write. Numbers are coerced; anything else is text.
 const WRITABLE = [
@@ -140,6 +140,94 @@ export async function ensureCityPrice(env, row) {
   return name
 }
 
+// ---------- مناسبات العميل — one client, several dates (2026-10-20) ----------
+// A group is the set of bookings sharing `group_id`; the token is the id of the booking
+// the group was started from and stays valid as a token even if that row is deleted.
+// NULL = a booking on its own. Each date remains a complete booking (its own city price,
+// hours, staff, payments, P&L row, calendar entry, clash flag) — the group only says
+// "same client", so the office can show and total them together.
+
+// Resolve a `group_with` reference: a booking id (number / "#12"), or a SARAB number in
+// any of the ways the owner types it ("SARAB-012", "sarab-12", "12").
+export async function findBookingRef(env, ref) {
+  if (ref == null || ref === '') return null
+  const s = String(ref).trim()
+  let m
+  if (typeof ref === 'number' || (m = s.match(/^#(\d+)$/))) {
+    return env.DB.prepare('SELECT id, group_id, booking_no FROM bookings WHERE id = ?1')
+      .bind(Number(m ? m[1] : ref)).first()
+  }
+  const no = (m = s.match(/^(?:SARAB-?)?(\d{1,6})$/i)) ? `SARAB-${m[1].padStart(3, '0')}` : s.toUpperCase()
+  return env.DB.prepare('SELECT id, group_id, booking_no FROM bookings WHERE booking_no = ?1').bind(no).first()
+}
+
+// The group id of `anchor`, starting a group on it when it has none yet.
+export async function groupIdOf(env, anchor) {
+  if (anchor.group_id) return anchor.group_id
+  await env.DB.prepare('UPDATE bookings SET group_id = ?1 WHERE id = ?1 AND group_id IS NULL').bind(anchor.id).run()
+  return anchor.id
+}
+
+// Link booking `id` with the booking `ref` points at. An existing group keeps its token:
+// a lone booking joins the other's group (whichever side it is on); when both already
+// have groups, `id`'s group merges into `ref`'s.
+export async function linkBooking(env, id, ref) {
+  const anchor = await findBookingRef(env, ref)
+  if (!anchor) return { ok: false, error: 'link-target-not-found' }
+  if (anchor.id === id) return { ok: false, error: 'link-self' }
+  const me = await env.DB.prepare('SELECT id, group_id FROM bookings WHERE id = ?1').bind(id).first()
+  if (!me) return { ok: false, error: 'not-found' }
+  if (me.group_id && !anchor.group_id) {
+    await env.DB.prepare('UPDATE bookings SET group_id = ?1 WHERE id = ?2').bind(me.group_id, anchor.id).run()
+    return { ok: true, group_id: me.group_id }
+  }
+  const gid = await groupIdOf(env, anchor)
+  if (me.group_id === gid) return { ok: true, group_id: gid }
+  if (me.group_id) await env.DB.prepare('UPDATE bookings SET group_id = ?1 WHERE group_id = ?2').bind(gid, me.group_id).run()
+  else await env.DB.prepare('UPDATE bookings SET group_id = ?1 WHERE id = ?2').bind(gid, id).run()
+  return { ok: true, group_id: gid }
+}
+
+// Take booking `id` out of its group. A group left with a single member dissolves.
+export async function unlinkBooking(env, id) {
+  const me = await env.DB.prepare('SELECT id, group_id FROM bookings WHERE id = ?1').bind(id).first()
+  if (!me) return { ok: false, error: 'not-found' }
+  if (!me.group_id) return { ok: true, group_id: null }
+  await env.DB.prepare('UPDATE bookings SET group_id = NULL WHERE id = ?1').bind(id).run()
+  await tidyGroup(env, me.group_id)
+  return { ok: true, group_id: null }
+}
+
+// A group of one is no group: clear the token so the 🔗 marker never points nowhere.
+export async function tidyGroup(env, gid) {
+  if (!gid) return
+  await env.DB.prepare(`UPDATE bookings SET group_id = NULL
+                        WHERE group_id = ?1 AND (SELECT COUNT(*) FROM bookings WHERE group_id = ?1) < 2`).bind(gid).run()
+}
+
+const GROUP_COLS = `id, booking_no, group_id, event_date, occasion, city, venue, status, start_time,
+                    price, extra_amount, ${totalSql()} AS total, deposit, remaining, phone, ${nameSql()} AS name`
+
+// Every booking of the group, soonest date first (undated last) — what the drawer strip lists.
+export async function groupRows(env, gid) {
+  if (!gid) return []
+  return (await env.DB.prepare(`SELECT ${GROUP_COLS} FROM bookings WHERE group_id = ?1
+                                ORDER BY (event_date IS NULL), event_date, id`).bind(gid).all()).results
+}
+
+// Other bookings carrying this booking's phone (last 9 digits, however it was typed) that
+// are not in its group yet — the clients the owner booked twice before linking existed.
+// A suggestion only: the same number can belong to a hall manager booking for others.
+export async function samePhoneRows(env, row) {
+  const digits = String(row?.phone || '').replace(/\D/g, '')
+  if (digits.length < 9) return []
+  return (await env.DB.prepare(`SELECT ${GROUP_COLS} FROM bookings
+     WHERE id != ?1 AND (group_id IS NULL OR group_id != ?2)
+       AND replace(replace(replace(replace(COALESCE(phone, ''), ' ', ''), '-', ''), '+', ''), '.', '') LIKE '%' || ?3
+     ORDER BY (event_date IS NULL), event_date DESC, id DESC LIMIT 8`)
+    .bind(row.id, row.group_id || 0, digits.slice(-9)).all()).results
+}
+
 export async function onRequestGet({ request, env }) {
   const u = new URL(request.url)
   const where = []
@@ -166,6 +254,9 @@ export async function onRequestGet({ request, env }) {
   if (u.searchParams.get('callback') === '1') where.push('callback = 1')
   const source = u.searchParams.get('source')
   if (source) { where.push('source = ?'); params.push(source) }
+  // One client's dates (the 🔗 chip in the grid): every booking sharing that group token.
+  const group = parseInt(u.searchParams.get('group') || '', 10)
+  if (group) { where.push('group_id = ?'); params.push(group) }
 
   const order = u.searchParams.get('order') === 'new'
     ? 'id DESC'
@@ -175,7 +266,7 @@ export async function onRequestGet({ request, env }) {
   const sql = `SELECT * FROM bookings
                ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
                ORDER BY ${order} LIMIT ${limit}`
-  const [list, conf] = await Promise.all([
+  const [list, conf, groups] = await Promise.all([
     env.DB.prepare(sql).bind(...params).all(),
     // Dates carrying 2+ live bookings. Severity depends on whether one of them is an
     // actual confirmed booking (مؤكد/مكتمل): that's a real double-booking risk (red);
@@ -185,7 +276,12 @@ export async function onRequestGet({ request, env }) {
                     FROM bookings
                     WHERE event_date IS NOT NULL AND status != 'ملغي'
                     GROUP BY event_date HAVING COUNT(*) > 1`).all(),
+    // How many dates each client group holds — counted over the whole table, not the
+    // filtered page, so a 🔗 3 chip is right even when the list shows one of the three.
+    env.DB.prepare('SELECT group_id, COUNT(*) AS n FROM bookings WHERE group_id IS NOT NULL GROUP BY group_id').all(),
   ])
+  const gn = new Map(groups.results.map((g) => [g.group_id, g.n]))
+  for (const r of list.results) r.group_n = r.group_id ? (gn.get(r.group_id) || 1) : 0
   return Response.json({
     ok: true,
     rows: list.results,
@@ -214,6 +310,13 @@ export async function onRequestPost({ request, env }) {
   if (row.status === CANCELLED) row.cancelled_at ||= row.added_at
   else { row.cancelled_at = null; row.cancel_decision = null }
 
+  // «تاريخ آخر لهذا العميل»: the new date joins the group of the booking it was added from.
+  if (body.group_with != null && body.group_with !== '') {
+    const anchor = await findBookingRef(env, body.group_with)
+    if (!anchor) return Response.json({ ok: false, error: 'link-target-not-found' }, { status: 400 })
+    row.group_id = await groupIdOf(env, anchor)
+  }
+
   row.booking_no = await nextBookingNo(env)
   row.source = 'office'
 
@@ -226,5 +329,5 @@ export async function onRequestPost({ request, env }) {
   const cityAdded = await ensureCityPrice(env, created)
   // Added straight in as a real booking → straight into the owner's Google Calendar.
   const calendar = await syncBookingCalendar(env, created, { onCalendar: BOOKED_STATUSES.includes(created.status) })
-  return Response.json({ ok: true, row: created, city_added: cityAdded, calendar })
+  return Response.json({ ok: true, row: created, city_added: cityAdded, calendar, group: await groupRows(env, created.group_id) })
 }

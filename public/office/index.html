@@ -311,6 +311,29 @@
   .field.cancel-only{background:rgba(201,123,106,.08); border-radius:8px; padding:.35rem .45rem}
   .field.extra-time{background:rgba(212,175,55,.07); border-radius:8px; padding:.35rem .45rem}
   .field.extra-time input[readonly]{font-weight:700; opacity:.9 !important}
+  /* 🔗 مناسبات العميل — one client, several dates (2026-10-20): the grid chip, the
+     client's-dates filter chip, and the drawer strip listing every linked date */
+  .gchip{background:rgba(127,179,201,.16); color:#A9D2E1; border:1px solid rgba(127,179,201,.5);
+    border-radius:999px; padding:.05rem .5rem; font-size:.7rem; font-weight:700; cursor:pointer;
+    margin-inline-start:.3rem; white-space:nowrap; font-family:inherit; line-height:1.4}
+  .gchip:hover{background:rgba(127,179,201,.32)}
+  .groupbox{background:rgba(127,179,201,.06); border:1px solid rgba(127,179,201,.3); border-radius:10px;
+    padding:.7rem .8rem; display:grid; gap:.45rem; font-size:.86rem}
+  .groupbox .ghead{display:flex; justify-content:space-between; align-items:baseline; gap:.6rem; flex-wrap:wrap}
+  .groupbox .ghead b{color:var(--gold)}
+  .grow{display:flex; gap:.5rem; align-items:baseline; flex-wrap:wrap; border-bottom:1px dashed rgba(127,179,201,.2); padding-bottom:.3rem}
+  .grow:last-of-type{border-bottom:0}
+  .grow.me{opacity:.72}
+  .grow .go{cursor:pointer; color:var(--gold); text-decoration:underline dotted; text-underline-offset:3px}
+  .grow .badge{font-size:.68rem; padding:.08rem .5rem}
+  .grow>b{margin-inline-start:auto; font-variant-numeric:tabular-nums}
+  .grow .gdue{font-size:.76rem}
+  .groupbox .actions{display:flex; gap:.45rem; flex-wrap:wrap; align-items:center}
+  .groupbox .glink{display:flex; gap:.4rem; align-items:center; flex-wrap:wrap}
+  .groupbox .glink input{max-width:190px; font-size:.82rem; padding:.3rem .5rem}
+  .gsug{display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; font-size:.8rem;
+    background:rgba(201,162,78,.07); border-radius:8px; padding:.35rem .5rem}
+  .gnote{font-size:.78rem; color:var(--muted)}
   .cmark{font-size:.72rem; margin-inline-start:.25rem; white-space:nowrap}
   .cdet{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:1rem; padding:.7rem .4rem; white-space:normal}
   .cdet .col{display:grid; gap:.5rem; align-content:start}
@@ -402,6 +425,7 @@
     <input type="date" id="dateCheckInput" aria-label="اختر تاريخاً للفحص">
   </span>
   <span class="chip dc-chip" id="dateCheckChip" style="display:none"></span>
+  <span class="chip dc-chip" id="groupChip" style="display:none" title="عرض تواريخ هذا العميل فقط — اضغط للعودة"></span>
   <div class="chips" id="statusChips"></div>
   <select id="month"><option value="">كل الشهور</option></select>
   <label class="toggle"><input type="checkbox" id="upcoming"> القادمة فقط</label>
@@ -483,7 +507,7 @@ const calColor = (s) => STATUS_COLORS[s] || ['rgba(194,161,121,.2)', 'var(--text
 
 // calRealOnly starts ON: the calendar answers "what am I actually committed to?", so it
 // opens on real bookings only. Unticking brings the استفسارات and عروض السعر back in.
-const state = { meta:null, rows:[], conflicts:new Set(), confirmedClashes:new Set(), tab:'bookings', filters:{ q:'', statusIn:[], statusEx:[], month:'', upcoming:false, nopast:false, order:'date', dateCheck:'' }, editing:null, remainTouched:false, calMonth:null, calRows:[], calRealOnly:true };
+const state = { meta:null, rows:[], conflicts:new Set(), confirmedClashes:new Set(), tab:'bookings', filters:{ q:'', statusIn:[], statusEx:[], month:'', upcoming:false, nopast:false, order:'date', dateCheck:'', group:null }, editing:null, remainTouched:false, calMonth:null, calRows:[], calRealOnly:true };
 
 async function api(path, opts={}) {
   const res = await fetch(path, { headers:{'Content-Type':'application/json'}, ...opts });
@@ -617,6 +641,12 @@ const cancelMark = (r) => {
   return '';
 };
 
+// 🔗 مناسبات العميل: a client booked on several dates carries the count beside the name;
+// tapping it lists exactly those dates (the server counts over the whole table, so the
+// number is right even when the current filter shows one of them).
+const groupChip = (r) => Number(r.group_n) > 1
+  ? ` <button type="button" class="gchip" data-g="${r.group_id}" title="عميل بعدة تواريخ (${r.group_n}) — اضغط لعرض مناسباته">🔗 ${r.group_n}</button>` : '';
+
 // Status priority for the date check: real bookings first, then advance, inquiries, cancelled last.
 const DATE_RANK = (s) => s === 'مؤكد' || s === 'مكتمل' ? 0 : s === 'دفع العربون' ? 1 : s === 'ملغي' ? 3 : 2;
 
@@ -663,7 +693,7 @@ function renderRows() {
         : clash ? 'أكثر من طلب غير مؤكد على هذا التاريخ' : '';
       return `<tr data-id="${r.id}"${taken ? ' class="taken"' : ''}>
         <td data-l="الرقم" class="num muted">${esc(r.booking_no || '—')}</td>
-        <td data-l="الاسم"><b>${esc(fullName(r))}</b>${r.source==='website' ? ' <span class="muted" style="font-size:.7rem">من الموقع</span>':''}</td>
+        <td data-l="الاسم"><b>${esc(fullName(r))}</b>${groupChip(r)}${r.source==='website' ? ' <span class="muted" style="font-size:.7rem">من الموقع</span>':''}</td>
         <td data-l="الهاتف" class="num">${esc(r.phone || '—')} ${wa ? `<a class="wa" href="${wa}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="واتساب">✆</a>` : ''}</td>
         <td data-l="تاريخ المناسبة" class="num${flagCls}"${flagTitle ? ` title="${flagTitle}"` : ''}>${dmy(r.event_date)}</td>
         <td data-l="النوع">${esc(r.occasion || '—')}</td>
@@ -676,6 +706,11 @@ function renderRows() {
       </tr>`;
     }).join('');
     $$('tr[data-id]', tb).forEach((tr) => tr.onclick = () => openDrawer(Number(tr.dataset.id)));
+    $$('.gchip', tb).forEach((b) => b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = state.rows.find((x) => x.id === Number(b.closest('tr').dataset.id));
+      setGroupView(Number(b.dataset.g), r ? fullName(r) : '');
+    });
   }
   const due = state.rows.reduce((s, r) => s + (r.status !== 'ملغي' && Number(r.remaining) > 0 ? Number(r.remaining) : 0), 0);
   $('#count').textContent = `${state.rows.length} سجل · متبقٍ ${money(due)}`;
@@ -1970,7 +2005,11 @@ async function loadMeta() {
 async function loadRows() {
   const f = state.filters;
   const p = new URLSearchParams();
-  if (f.dateCheck) {
+  if (f.group) {
+    // one client's dates (🔗 chip) — the whole group, whatever the other filters say
+    p.set('group', f.group);
+    p.set('order', 'date');
+  } else if (f.dateCheck) {
     // exact-date availability check overrides the other filters — show everything on that day
     p.set('date', f.dateCheck);
     p.set('order', 'date');
@@ -2320,24 +2359,31 @@ async function openDrawerById(id) {
 
 // `presetDate` starts a new booking on a chosen day — the التقويم tab passes the square
 // that was clicked, so the date (and its availability intel) is already filled in.
-function openDrawer(id, presetDate) {
+// `preset` starts a new booking as another date of an existing client (🔗): its client
+// fields come prefilled and the row joins that client's group when saved.
+function openDrawer(id, presetDate, preset) {
   const row = id ? state.rows.find((r) => r.id === id) : null;
   state.editing = row ? row.id : null;
   state.remainTouched = false;
   state.staffTouched = false;
   state.payTotal = null;
-  $('#dTitle').textContent = row ? `${row.booking_no || '#' + row.id} — ${fullName(row)}` : 'حجز جديد';
+  state.groupWith = (!row && preset && preset.groupWith) || null;
+  $('#dTitle').textContent = row ? `${row.booking_no || '#' + row.id} — ${fullName(row)}`
+    : preset ? `تاريخ آخر لـ ${fullName(preset.anchor)}` : 'حجز جديد';
   // سجل المدفوعات sits right below حالة الدفع — history + the سجّل دفعة form. Only for a
   // saved booking: a payment is a real record and needs a booking row to hang on.
   const PAY_AT = F.findIndex(([k]) => k === 'payment_status') + 1;
   $('#dBody').innerHTML = '<div class="field full intel" id="intel" style="display:none"></div>'
+    + '<div class="field full groupbox" id="groupbox" style="display:none"></div>'
     + F.slice(0, PAY_AT).map(fieldHtml).join('')
     + (row ? '<div class="field full paybox" id="paybox"><span class="muted">💳 جارٍ تحميل المدفوعات…</span></div>' : '')
     + F.slice(PAY_AT).map(fieldHtml).join('');
-  if (row) loadPayments(row.id);
+  if (row) { loadPayments(row.id); loadGroup(row.id); }
+  else if (preset) renderGroupPreset(preset);
   for (const [key,, kind] of F) {
     const el = $('#f_' + key);
     const v = row ? row[key]
+      : preset && key in preset.fields ? preset.fields[key]
       : key === 'status' ? 'استفسار'
       : key === 'event_date' && presetDate ? presetDate
       : null;
@@ -2457,8 +2503,10 @@ async function save() {
       const r = await api('/office/api/bookings/' + state.editing, { method: 'PATCH', body: JSON.stringify(body) });
       toast('تم الحفظ ✓' + cityNote(r) + calNote(r), calFailed(r));
     } else {
+      if (state.groupWith) body.group_with = state.groupWith;
       const r = await api('/office/api/bookings', { method: 'POST', body: JSON.stringify(body) });
-      toast(`أُنشئ ${r.row.booking_no} ✓` + cityNote(r) + calNote(r), calFailed(r));
+      const linkNote = state.groupWith ? ` · 🔗 رُبط بمناسبات العميل (${(r.group || []).length})` : '';
+      toast(`أُنشئ ${r.row.booking_no} ✓` + linkNote + cityNote(r) + calNote(r), calFailed(r));
     }
     closeDrawer();
     await Promise.all([loadMeta(), state.tab === 'calendar' ? loadCalendarTab() : loadRows()]);
@@ -2467,6 +2515,127 @@ async function save() {
   } catch (e) {
     if (e.message !== 'unauthorized') toast('لم يتم الحفظ — حاول مجدداً', true);
   }
+}
+
+// ---------- 🔗 مناسبات العميل — one client, several dates (drawer strip) ----------
+// Each date is a full booking of its own (its own hall, city price, hours, staff, payments,
+// P&L row, calendar entry); the group only says "same client". The strip lists the
+// client's dates with their money, totals them, starts another date prefilled with the
+// client's details, links bookings that were entered separately (same phone → one tap,
+// or any SARAB number), copies the client's details across, and unlinks.
+
+// What travels with the client to another date — never the event's own fields.
+const CLIENT_FIELDS = ['first_name', 'last_name', 'phone', 'email', 'client_city', 'lead_source', 'interest'];
+const gTotal = (g) => (g.total ?? null) !== null ? Number(g.total)
+  : Number.isFinite(Number(g.price)) && g.price !== null ? Number(g.price) + (Number(g.extra_amount) || 0) : null;
+const gLine = (g, me) => `${dmy(g.event_date)} · ${esc(g.occasion || '—')} · ${esc(g.city || '—')}${g.venue ? ' — ' + esc(g.venue) : ''}`
+  + (g.start_time ? ` · ${esc(g.start_time)}` : '') + (me ? ' <span class="muted">(هذا الحجز)</span>' : '');
+
+async function loadGroup(bookingId) {
+  try {
+    const r = await api('/office/api/bookings/' + bookingId);
+    renderGroup(bookingId, r.row, r.group || [], r.same_phone || []);
+  } catch (e) {
+    if (e.message !== 'unauthorized') { const b = $('#groupbox'); if (b) b.style.display = 'none'; }
+  }
+}
+
+// The one place a link changes: PATCH group_with on `bookingId` (id / SARAB number, or
+// null to unlink), then refresh the open drawer's strip, the grid chips and the header.
+async function relink(bookingId, ref, okMsg, openId = bookingId) {
+  try {
+    await api('/office/api/bookings/' + bookingId, { method: 'PATCH', body: JSON.stringify({ group_with: ref }) });
+    toast(okMsg);
+    await Promise.all([loadGroup(openId), state.tab === 'calendar' ? loadCalendarTab() : loadRows()]);
+  } catch (e) {
+    if (e.message === 'unauthorized') return;
+    toast(e.message === 'link-target-not-found' ? 'لا يوجد حجز بهذا الرقم' : e.message === 'link-self' ? 'هذا هو الحجز نفسه' : 'لم يتم الربط', true);
+  }
+}
+
+function renderGroup(bookingId, me, group, sug) {
+  const box = $('#groupbox');
+  if (!box || state.editing !== bookingId) return;
+  const n = group.length;
+  const live = group.filter((g) => g.status !== 'ملغي');
+  const sum = (f) => live.reduce((s, g) => s + (Number(f(g)) || 0), 0);
+  const due = sum((g) => g.remaining);
+  const head = n > 1
+    ? `${n} تواريخ${live.length < n ? ` (${n - live.length} ملغي)` : ''} · الإجمالي <b class="pos">${money(sum(gTotal))}</b> · المتبقي <b class="${due > 0 ? 'neg' : 'pos'}">${money(due)}</b>`
+    : '<span class="muted">تاريخ واحد — أضف تاريخاً آخر لنفس العميل أو اربط حجزاً موجوداً</span>';
+  const rows = n > 1 ? group.map((g) => `<div class="grow${g.id === bookingId ? ' me' : ''}" data-id="${g.id}">
+      <span class="num muted">${esc(g.booking_no || '#' + g.id)}</span>
+      <span${g.id === bookingId ? '' : ' class="go" title="فتح هذا الحجز"'}>${gLine(g, g.id === bookingId)}</span>
+      ${badge(g.status)}
+      <b>${money(gTotal(g))}${Number(g.remaining) > 0 ? ` <span class="muted gdue">متبقٍ ${money(g.remaining)}</span>` : ''}</b>
+    </div>`).join('') : '';
+  const sugHtml = sug.length ? `<div class="gsug"><span>📞 نفس رقم الهاتف — نفس العميل؟</span>${sug.map((g) =>
+    `<span class="num muted">${esc(g.booking_no || '#' + g.id)}</span><span>${gLine(g)}</span>${badge(g.status)}
+     <button type="button" class="btn btn--sm gsuglink" data-id="${g.id}">🔗 اربط</button>`).join('<span style="flex-basis:100%"></span>')}</div>` : '';
+  box.innerHTML = `
+    <div class="ghead"><b>🔗 مناسبات العميل</b><span>${head}</span></div>
+    ${rows}
+    ${sugHtml}
+    <div class="actions">
+      <button type="button" class="btn btn--sm" id="gAdd">➕ تاريخ آخر لهذا العميل</button>
+      ${n > 1 ? `<button type="button" class="btn btn--sm btn--ghost" id="gCopy" title="ينسخ الاسم والهاتف والبريد ومدينة العميل والمصدر والاهتمام كما هي في هذا النموذج إلى باقي تواريخه">⇅ نسخ بيانات العميل لباقي التواريخ</button>
+      <button type="button" class="btn btn--sm btn--ghost" id="gUnlink">✂ فصل هذا التاريخ</button>` : ''}
+      <span class="glink"><input id="gRef" placeholder="ربط بحجز موجود: SARAB-012" inputmode="text"><button type="button" class="btn btn--sm btn--ghost" id="gLink">🔗 اربط</button></span>
+    </div>
+    ${n > 1 ? '<div class="gnote">كل تاريخ حجز مستقل: سعره وقاعته وطاقمه ومدفوعاته وسطره في المالية. تحويلة واحدة لتاريخين = دفعة على كل حجز بنفس المرجع.</div>' : ''}`;
+  box.style.display = '';
+  $$('.grow .go', box).forEach((el) => el.onclick = () => openDrawerById(Number(el.closest('.grow').dataset.id)));
+  $('#gAdd').onclick = () => addDateFor(me, group);
+  // The suggested booking joins THIS client's dates (not the other way round).
+  $$('.gsuglink', box).forEach((b) => b.onclick = () => relink(Number(b.dataset.id), bookingId, 'رُبط الحجزان ✓ — نفس العميل', bookingId));
+  const linkRef = () => {
+    const v = $('#gRef').value.trim();
+    if (!v) { toast('اكتب رقم الحجز أولاً', true); return; }
+    relink(bookingId, v, 'تم الربط ✓');
+  };
+  $('#gLink').onclick = linkRef;
+  $('#gRef').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); linkRef(); } });
+  if (n > 1) {
+    $('#gUnlink').onclick = () => {
+      if (!confirm(`فصل ${me.booking_no || '#' + me.id} عن مناسبات هذا العميل؟ يبقى الحجز كما هو، فقط دون الربط.`)) return;
+      relink(bookingId, null, 'فُصل الحجز عن المجموعة ✓');
+    };
+    $('#gCopy').onclick = async () => {
+      const others = group.filter((g) => g.id !== bookingId);
+      if (!confirm(`نسخ بيانات العميل كما هي في هذا النموذج إلى ${others.length} ${others.length === 1 ? 'حجز آخر' : 'حجوزات أخرى'}؟ (الاسم، الهاتف، البريد، مدينة العميل، المصدر، الاهتمام)`)) return;
+      const body = {};
+      for (const k of CLIENT_FIELDS) body[k] = $('#f_' + k).value;
+      try {
+        for (const g of others) await api('/office/api/bookings/' + g.id, { method: 'PATCH', body: JSON.stringify(body) });
+        toast(`نُسخت بيانات العميل إلى ${others.length} ✓`);
+        await Promise.all([loadGroup(bookingId), state.tab === 'calendar' ? loadCalendarTab() : loadRows()]);
+      } catch (e) { if (e.message !== 'unauthorized') toast('لم يكتمل النسخ — حاول مجدداً', true); }
+    };
+  }
+}
+
+// Start another date for the same client: a new booking with the client's details
+// (never the event's — date, hall, city, times, price start empty) that joins the group
+// on save. A finished or cancelled first date doesn't make the new one so.
+function addDateFor(me, group) {
+  const fields = {};
+  for (const k of CLIENT_FIELDS) fields[k] = me[k] ?? null;
+  fields.added_at = me.added_at || null;
+  fields.status = me.status === 'مكتمل' ? 'مؤكد' : me.status === 'ملغي' ? 'استفسار' : (me.status || 'استفسار');
+  openDrawer(null, null, { groupWith: me.id, anchor: me, fields, group: group.length ? group : [me] });
+  toast('املأ تفاصيل التاريخ الجديد ثم احفظ — سيُربط بالعميل تلقائياً');
+}
+
+// The strip on a not-yet-saved second date: which client it belongs to and their dates.
+function renderGroupPreset(preset) {
+  const box = $('#groupbox');
+  if (!box) return;
+  const list = preset.group || [];
+  box.innerHTML = `<div class="ghead"><b>🔗 تاريخ آخر للعميل ${esc(fullName(preset.anchor))}</b>
+      <span class="muted">يُربط بمناسباته عند الحفظ</span></div>
+    ${list.map((g) => `<div class="grow"><span class="num muted">${esc(g.booking_no || '#' + g.id)}</span><span>${gLine(g)}</span>${badge(g.status)}<b>${money(gTotal(g))}</b></div>`).join('')}
+    <div class="gnote">بيانات العميل منسوخة أدناه — املأ تاريخ المناسبة والقاعة والمدينة والسعر لهذا التاريخ.</div>`;
+  box.style.display = '';
 }
 
 // ---------- 🚫 الإلغاءات — cancelled after paying: what goes back, what stays ----------
@@ -2667,7 +2836,7 @@ $('#refreshBtn').onclick = () => Promise.all([loadMeta(), loadRows()]).then(() =
 $('#csvBtn').onclick = () => {
   const cols = ['booking_no','name','first_name','last_name','phone','event_date','occasion','city','client_city','region','venue',
     'status','payment_status','price','extra_hours','extra_amount','extra_note','deposit','remaining','staff','staff_count',
-    'lead_source','interest','callback','notes','cancelled_at','cancel_decision','cancel_reason','source','lang','created_at'];
+    'lead_source','interest','callback','notes','cancelled_at','cancel_decision','cancel_reason','source','lang','created_at','group_id'];
   const csv = [cols.join(',')]
     .concat(state.rows.map((r) => cols.map((c) => `"${String(r[c] ?? '').replace(/"/g, '""')}"`).join(',')))
     .join('\n');
@@ -2905,7 +3074,9 @@ function setDateCheck(iso) {
 }
 // Leaving the check returns to the normal list. reload=false when another filter is taking
 // over (it will load itself); reload=true when the owner explicitly clears the check.
+// Every other filter goes through here first, so the 🔗 client view clears with it.
 function clearDateCheck(reload) {
+  clearGroupView(false);
   const was = state.filters.dateCheck;
   state.filters.dateCheck = '';
   $('#dateCheckInput').value = '';
@@ -2916,6 +3087,23 @@ function clearDateCheck(reload) {
 $('#dateCheckBtn').onclick = openDatePicker;
 $('#dateCheckInput').onchange = (e) => setDateCheck(e.target.value);
 $('#dateCheckChip').onclick = () => clearDateCheck(true);
+
+// 🔗 one client's dates: the grid shows exactly that client's bookings until the chip is closed.
+function setGroupView(gid, label) {
+  clearDateCheck(false);
+  state.filters.group = gid;
+  const chip = $('#groupChip');
+  chip.textContent = `🔗 مناسبات ${label || 'العميل'} ✕`;
+  chip.style.display = '';
+  loadRows();
+}
+function clearGroupView(reload) {
+  const was = state.filters.group;
+  state.filters.group = null;
+  $('#groupChip').style.display = 'none';
+  if (reload && was) loadRows();
+}
+$('#groupChip').onclick = () => clearGroupView(true);
 
 let qTimer;
 $('#q').addEventListener('input', (e) => {

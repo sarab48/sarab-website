@@ -1,10 +1,12 @@
 /*
-  /office/api/bookings/:id — GET one · PATCH update (whitelisted fields only) ·
-  DELETE (owner's explicit request; UI asks for confirmation — cancellations should
-  normally stay as the ملغي status).
+  /office/api/bookings/:id — GET one (+ the client's other dates and same-phone
+  suggestions) · PATCH update (whitelisted fields only; `group_with` links the booking to
+  another one's group, null unlinks it) · DELETE (owner's explicit request; UI asks for
+  confirmation — cancellations should normally stay as the ملغي status).
   Auth: ../../_middleware.js.
 */
-import { cleanValue, ensureBookingNo, ensureEventFinance, ensureCityPrice, BOOKED_STATUSES, CANCELLED } from '../bookings.js'
+import { cleanValue, ensureBookingNo, ensureEventFinance, ensureCityPrice, BOOKED_STATUSES, CANCELLED,
+  linkBooking, unlinkBooking, tidyGroup, groupRows, samePhoneRows } from '../bookings.js'
 import { syncBookingCalendar, removeBookingCalendar } from '../../../../shared/gcal.js'
 
 const WRITABLE = [
@@ -19,7 +21,10 @@ const WRITABLE = [
 export async function onRequestGet({ env, params }) {
   const row = await env.DB.prepare('SELECT * FROM bookings WHERE id = ?1').bind(Number(params.id)).first()
   if (!row) return Response.json({ ok: false, error: 'not-found' }, { status: 404 })
-  return Response.json({ ok: true, row })
+  // The client's other dates (مناسبات العميل) and bookings on the same number that are
+  // not linked yet — the drawer offers to link those with one tap.
+  const [group, same_phone] = await Promise.all([groupRows(env, row.group_id), samePhoneRows(env, row)])
+  return Response.json({ ok: true, row, group, same_phone })
 }
 
 export async function onRequestPatch({ request, env, params }) {
@@ -32,7 +37,10 @@ export async function onRequestPatch({ request, env, params }) {
     const v = cleanValue(k, body[k])
     fields[k] = v === undefined ? null : v
   }
-  if (!Object.keys(fields).length) return Response.json({ ok: false, error: 'no-fields' }, { status: 400 })
+  // Linking is its own operation (it rewrites group_id on other rows too), so a PATCH may
+  // carry only `group_with` — a booking id or SARAB number to join, or null to leave.
+  const hasLink = 'group_with' in body
+  if (!Object.keys(fields).length && !hasLink) return Response.json({ ok: false, error: 'no-fields' }, { status: 400 })
   const raw = []   // SET clauses written in SQL, no bind (stamps that must not overwrite)
 
   // Turning into a real booking stamps تاريخ الحجز automatically (never overwrites an
@@ -64,12 +72,21 @@ export async function onRequestPatch({ request, env, params }) {
   }
   sets.push(...raw)
 
-  vals.push(Number(params.id))
-  const { meta } = await env.DB.prepare(`UPDATE bookings SET ${sets.join(', ')} WHERE id = ?${vals.length}`)
-    .bind(...vals).run()
-  if (!meta.changes) return Response.json({ ok: false, error: 'not-found' }, { status: 404 })
+  if (sets.length) {
+    vals.push(Number(params.id))
+    const { meta } = await env.DB.prepare(`UPDATE bookings SET ${sets.join(', ')} WHERE id = ?${vals.length}`)
+      .bind(...vals).run()
+    if (!meta.changes) return Response.json({ ok: false, error: 'not-found' }, { status: 404 })
+  }
+  if (hasLink) {
+    const link = body.group_with == null || body.group_with === ''
+      ? await unlinkBooking(env, Number(params.id))
+      : await linkBooking(env, Number(params.id), body.group_with)
+    if (!link.ok) return Response.json({ ok: false, error: link.error }, { status: link.error === 'not-found' ? 404 : 400 })
+  }
 
   const row = await env.DB.prepare('SELECT * FROM bookings WHERE id = ?1').bind(Number(params.id)).first()
+  if (!row) return Response.json({ ok: false, error: 'not-found' }, { status: 404 })
   // A website/WhatsApp lead that just became a real booking gets its SARAB-NNN here — the
   // finance row is keyed on it, so this must run first (idempotent, existing numbers kept).
   await ensureBookingNo(env, row)
@@ -80,7 +97,7 @@ export async function onRequestPatch({ request, env, params }) {
   // A real booking belongs in the owner's Google Calendar; one that stopped being real
   // (ملغي, or its date cleared) comes back out. Never fails the save — see shared/gcal.js.
   const calendar = await syncBookingCalendar(env, row, { onCalendar: BOOKED_STATUSES.includes(row.status) })
-  return Response.json({ ok: true, row, city_added: cityAdded, calendar })
+  return Response.json({ ok: true, row, city_added: cityAdded, calendar, group: await groupRows(env, row.group_id) })
 }
 
 export async function onRequestDelete({ env, params }) {
@@ -94,5 +111,7 @@ export async function onRequestDelete({ env, params }) {
   // payment forever. (Revisit before the receipt automation: a payment carrying an
   // issued document should block this delete instead.)
   await env.DB.prepare('DELETE FROM payments WHERE booking_id = ?1').bind(Number(params.id)).run()
+  // The client's other dates keep their link; a group left with one member dissolves.
+  await tidyGroup(env, row.group_id)
   return Response.json({ ok: true, calendar })
 }

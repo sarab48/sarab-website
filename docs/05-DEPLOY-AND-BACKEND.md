@@ -1152,3 +1152,79 @@ best to record it: a specific box, or write it into the full amount?").**
   charge landing brought it to **0** — price 1800 · extra 1 h / 200 · total 2000 · paid 2000.
   The backup was re-taken right before the migration so the diff matched that state.
   Commit `f211e75` (feature) + the docs follow-up.
+
+**2026-10-20 — مناسبات العميل: one client, several dates (owner request: "some clients
+book more than one date — the bride-only event and the groom-and-bride event; today I
+have to create a new booking for the second date; the dates don't have to be in the same
+location").**
+
+- **Decision: keep one booking row per event date, and link the client's dates.** Every
+  part of the office is built per event — the city-tier price, hours and times, the hall,
+  the staff, the payments ledger, the P&L row (keyed on the SARAB number), the calendar
+  entry, the date-clash flag, the month/year analytics. Folding two dates into one row
+  would have to split every one of those again. What was missing was only the *link*, so
+  the office could see "this is the same client" and work with the dates together.
+- **Model** (`db/migrations/2026-10-20-booking-groups.sql`, additive): `bookings.group_id`
+  INTEGER + `idx_bookings_group`. A group is the set of rows sharing the token; the token is
+  the id of the booking the group was started from and stays valid if that row is later
+  deleted (it is a shared token, not a foreign key). NULL = a booking on its own. A group
+  left with one member dissolves (unlink or delete clears the token — `tidyGroup`).
+- **API** (`bookings.js`, `bookings/[id].js`): list rows carry `group_n` (counted over the
+  whole table, so the chip is right under any filter) and `?group=<token>` lists one
+  client's dates; GET one returns `group` (every linked date with date/occasion/city/hall/
+  status/total/remaining) and `same_phone` (unlinked bookings on the same number, last 9
+  digits however typed — a suggestion, never automatic: a hall manager can book for several
+  couples); POST `group_with` makes the new row join that booking's group; PATCH
+  `group_with` links (a booking id, `#id`, or a SARAB number in any spelling — `SARAB-012`,
+  `sarab-12`, `12`), `null` unlinks; a PATCH may carry only the link. `linkBooking` keeps an
+  existing group's token stable: a lone booking joins the other's group whichever side it
+  is on; two groups merge into the target's. Errors: `link-target-not-found`, `link-self`.
+- **Dashboard.** Grid: a `🔗 N` chip beside the name of any client with 2+ dates (also on
+  the phone layout); tapping it switches the list to that client's dates with a closable
+  `#groupChip` (same pattern as فحص تاريخ; any other filter clears it). Drawer: a
+  `#groupbox` strip under the intel — count + الإجمالي + المتبقي over the live (non-ملغي)
+  dates, one line per date (SARAB no · date · occasion · city — hall · time · status · total
+  · متبقٍ; this booking marked, the others open on click), then «📞 نفس رقم الهاتف — نفس
+  العميل؟» suggestions with a one-tap «اربط», and the actions: **➕ تاريخ آخر لهذا العميل**
+  (opens the new-booking form with the client's details prefilled — names, phone, email,
+  مدينة العميل, المصدر, الاهتمام, تاريخ الإضافة, status (مكتمل→مؤكد, ملغي→استفسار) — while
+  every event field starts empty; saving posts `group_with` and the toast says it joined),
+  **⇅ نسخ بيانات العميل لباقي التواريخ** (confirm-guarded; PATCHes the client fields as they
+  stand in the form to the other dates — nothing else), **✂ فصل هذا التاريخ** (confirm), and
+  «ربط بحجز موجود: SARAB-012» for linking by number. The strip ends with the rule in one
+  line: each date is an independent booking (price, hall, staff, payments, finance row);
+  one transfer for two dates = one payment per booking with the same reference (the
+  existing split-transfer convention). CSV gains `group_id`.
+- **What deliberately did not change.** Numbering (each date keeps its own SARAB-NNN —
+  the finance row and the ledger hang on it), payments (per date; combined totals shown in
+  the strip), calendar (one entry per date, as before), analytics (events are still counted
+  per date). Nothing links automatically — not WhatsApp leads, not the website form; the
+  owner links from the drawer, where the same-phone suggestion makes it one tap.
+- **Test** `_vgroup.mjs` (port 8787, 34 checks: POST joins + anchor token, group rows'
+  fields, list `group_n` + `?group=`, same-phone both ways, link by SARAB number in another
+  spelling, suggestion disappears once linked, bad/self refs rejected, field+link in one
+  PATCH, unlink, second group, merge; UI chip text, client view on/off, strip rows/marks/
+  totals (cancelled date excluded, shown in the head), actions present, click-through both
+  ways, add-date prefill (client fields in, event fields empty) → save joins (5), suggestion
+  shown → one-tap link (6) → suggestion gone, copy client details (5 rows), unlink from the
+  other drawer, delete keeps the rest linked, group of one dissolves, lone↔lone link,
+  dissolve on delete, no page errors). Re-run clean: `_vextra`, `_vcancel`, `_vpayments`,
+  `_vstaff`. Screens: `docs/styleframes/office-group-{grid,drawer,adddate}-{desktop,phone}.png`.
+  Gotcha met while testing: the drawer slides in over .25 s — a screenshot right after the
+  open shows it cut on the left edge; settle ~600 ms first.
+- **Data.** Backup `ops/db-backups/2026-10-20-pre-booking-groups/bookings.json` (493 rows ×
+  45 cols at backup time: 261 استفسار · 130 عرض سعر · 30 مؤكد · 3 دفع العربون · 38 مكتمل ·
+  31 ملغي). Migration script `ops/migrate-2026-10-20-booking-groups.sh` (idempotent; adds the
+  column + index, then diff-verifies every row and value against the backup and that
+  `group_id` is NULL everywhere). No existing booking is linked by the migration — the owner
+  links the clients who already have two bookings from the drawer (the same-phone
+  suggestion surfaces them).
+- **Remote migration applied + deploy `e9520d65` verified (2026-10-20).**
+  `ops/migrate-2026-10-20-booking-groups.sh` ran clean on the first pass (no classifier
+  block): column + index added, diff-verified **493/493 rows, 45 → 46 columns, 0
+  pre-existing values changed, `group_id` NULL everywhere**. Deployed only after the
+  migration (the list API selects the column — the 2026-09-16 lesson). Post-deploy: apex +
+  www 200, `/office` and `/office/api/bookings` 302 to Access, both Pages secrets intact
+  (`EMAIL_API_TOKEN`, `WA_WEBHOOK_TOKEN`). The `ops/` folder (script + backup) is
+  git-ignored, as before. Next for the owner: open any client who already has two
+  bookings — the drawer suggests the other one under «نفس رقم الهاتف» — and tap «اربط».

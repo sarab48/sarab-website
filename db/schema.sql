@@ -53,11 +53,17 @@ CREATE TABLE IF NOT EXISTS bookings (
   -- overtime stays countable; total owed = price + COALESCE(extra_amount, 0).
   extra_hours     REAL,                -- ساعات إضافية (0.5 allowed)
   extra_amount    REAL,                -- رسوم الوقت الإضافي ₪
-  extra_note      TEXT                 -- ملاحظة الإضافي
+  extra_note      TEXT,                -- ملاحظة الإضافي
+  -- مناسبات العميل (2026-10-20): one client, several dates. Every booking of the same
+  -- client shares the id of the booking the group was started from; NULL = on its own.
+  -- A shared token, not a foreign key (survives the first row's deletion). Each date
+  -- stays a full booking — pricing, staff, payments, P&L and calendar are all per event.
+  group_id        INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_bookings_event_date ON bookings(event_date);
 CREATE INDEX IF NOT EXISTS idx_bookings_status     ON bookings(status);
 CREATE INDEX IF NOT EXISTS idx_bookings_created_at ON bookings(created_at);
+CREATE INDEX IF NOT EXISTS idx_bookings_group      ON bookings(group_id);
 
 -- أسعار المدن
 CREATE TABLE IF NOT EXISTS city_prices (
